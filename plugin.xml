@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<plugin xmlns="http://apache.org/cordova/ns/plugins/1.0"
+xmlns:android="http://schemas.android.com/apk/res/android"
+           id="org.apache.cordova.background-download"
+      version="0.0.1">
+    <name>Background Download</name>
+
+    <description>Cordova Background Download Plugin</description>
+    <license>Apache 2.0</license>
+    <keywords>cordova,background,file,download</keywords>
+    <repo>https://git-wip-us.apache.org/repos/asf/cordova-plugin-media-capture.git</repo>
+    <issue>https://issues.apache.org/jira/browse/CB/component/12320646</issue>
+    
+    <js-module src="www/BackgroundDownloader.js" name="BackgroundDownloader">
+        <clobbers target="BackgroundDownloader" />
+    </js-module>
+    
+    <js-module src="www/DownloadOperation.js" name="DownloadOperation">
+        <clobbers target="DownloadOperation" />
+    </js-module>
+</plugin>
