@@ -44,8 +44,12 @@ var app = {
             var download = downloader.createDownload(uriString, targetFile);
             // Start the download and persist the promise to be able to cancel the download.
             app.downloadPromise = download.startAsync();
-            
             app.downloadPromise.then(complete, error, progress);
+
+            // TODO Q.js does not support cancel method for promises so our custom cancel method is missed
+            // at promises chaining; this is why we save original promise and not the one returned after .then();
+            // download.startAsync().cancel exists
+            // download.startAsync().then(complete, error, progress).cancel does not exist
 
         } catch(err) {
             console.log('Error: ' + err);
