@@ -1,5 +1,4 @@
 ﻿/*
- *
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -19,40 +18,62 @@
  *
 */
 
-var exec = require('cordova/exec');
+var exec = require('cordova/exec'),
+    q = require('./q');
 
 /**
  * Performs recurrent asynchronous background download operations on a regular basis.
 */
-var DownloadOperation = function (uri, resultFile, minTimeInterval) {
+var DownloadOperation = function (uri, resultFile) {
 
+    if (uri == null || resultFile == null) {
+        throw new Error("missing or invalid argument");
+    }
+    
     this.uri = uri;
     this.resultFile = resultFile;
-    this.minTimeInterval = minTimeInterval;
-    // generated id is used to make sure background download for this resource is not scheduled twice
-    this.id = uri + '|' + location;
-
 };
 
 /**
  * Starts download operations.
 */
-DownloadOperation.prototype.startAsync = function(successCallback, errorCallback) {
+DownloadOperation.prototype.startAsync = function() {
 
-    if (typeof this.uri === "undefined" || typeof this.resultFile === "undefined") {
-        errorCallback("invalid argument");
-        return;
-    }
-    
-    exec(successCallback, errorCallback, "DownloadOperation", "startAsync", [this]);
+    var deferred = q.defer(),
+        me = this,
+        successCallback = function(result) {
+
+            // success callback is used to both report operation progress and 
+            // as operation completeness handler
+            
+            if (result && result.progress) {
+                deferred.notify(result.progress);
+            } else {
+                deferred.resolve(result);
+            }
+        },
+        errorCallback = function(err) {
+            deferred.reject(err);
+        };
+
+    exec(successCallback, errorCallback, "BackgroundDownload", "startAsync", [this, deferred]);
+
+    // Cancel support via custom cancel function:
+    // Q.js does not provide such functionality
+    // https://github.com/angular/angular.js/pull/2452
+    deferred.promise.cancel = function() {
+        me.stop();
+    };
+
+    return deferred.promise;
 };
 
 /**
  * Stops download operations.
 */
-DownloadOperation.prototype.stop = function(successCallback, errorCallback) {
+DownloadOperation.prototype.stop = function() {
 
-    exec(successCallback, errorCallback, "DownloadOperation", "stop", [this]);
+    exec(null, null, "BackgroundDownload", "stop", [this]);
 
 };
 
