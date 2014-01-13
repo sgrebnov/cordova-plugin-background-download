@@ -2,9 +2,8 @@
     downloadOperationPromise: null, // TODO concurrent operations support
     startAsync: function (success, fail, args) {
         try {
-            var download = args[0],
-                resultFile = download.resultFile,
-                uri = Windows.Foundation.Uri(download.uri);
+            var uri = args[0],
+                resultFilePath = args[1];
 
             var completeHandler = function() {
                 success();
@@ -22,7 +21,7 @@
                 });
             };
 
-            Windows.Storage.StorageFile.getFileFromPathAsync(resultFile.fullPath).done(
+            Windows.Storage.StorageFile.getFileFromPathAsync(resultFilePath).done(
                 function (file) {
                     var downloadOperation = Windows.Networking.BackgroundTransfer.BackgroundDownloader().createDownload(uri, file);
                     downloadOperationPromise = downloadOperation.startAsync().then(completeHandler, errorHandler, progressHandler);

@@ -46,7 +46,7 @@ DownloadOperation.prototype.startAsync = function() {
             // success callback is used to both report operation progress and 
             // as operation completeness handler
             
-            if (result && result.progress) {
+            if (result && typeof result.progress != 'undefined') {
                 deferred.notify(result.progress);
             } else {
                 deferred.resolve(result);
@@ -56,7 +56,7 @@ DownloadOperation.prototype.startAsync = function() {
             deferred.reject(err);
         };
 
-    exec(successCallback, errorCallback, "BackgroundDownload", "startAsync", [this, deferred]);
+    exec(successCallback, errorCallback, "BackgroundDownload", "startAsync", [this.uri, this.resultFile.fullPath]);
 
     // Cancel support via custom cancel function:
     // Q.js does not provide such functionality
@@ -73,7 +73,7 @@ DownloadOperation.prototype.startAsync = function() {
 */
 DownloadOperation.prototype.stop = function() {
 
-    exec(null, null, "BackgroundDownload", "stop", [this]);
+    exec(null, null, "BackgroundDownload", "stop", [this.uri]);
 
 };
 

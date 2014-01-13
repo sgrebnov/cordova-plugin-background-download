@@ -25,6 +25,16 @@ xmlns:android="http://schemas.android.com/apk/res/android"
         <clobbers target="DownloadOperation" />
     </js-module>
 
+    <!-- wp8 -->
+    <platform name="wp8">
+        <config-file target="config.xml" parent="/*">
+            <feature name="BackgroundDownload">
+                <param name="wp-package" value="BackgroundDownload"/>
+            </feature>
+        </config-file>
+        <source-file src="src/wp/BackgroundDownload.cs" />
+    </platform>
+
     <!-- windows8 -->
     <platform name="windows8">
         <js-module src="src/windows8/BackgroundDownloadProxy.js" name="BackgroundDownload">

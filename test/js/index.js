@@ -26,6 +26,9 @@ var app = {
 
         var lblProgress = document.getElementById('lblProgress');
 
+        // show that download has been started
+        lblProgress.innerHTML = '0%';
+
         var complete = function() {
             lblProgress.innerHTML = 'Done';
         };
