@@ -25,6 +25,16 @@ xmlns:android="http://schemas.android.com/apk/res/android"
         <clobbers target="DownloadOperation" />
     </js-module>
 
+    <!-- android -->
+    <platform name="android">
+        <config-file target="res/xml/config.xml" parent="/*">
+            <feature name="BackgroundDownload" >
+                <param name="android-package" value="org.apache.cordova.backgroundDownload.BackgroundDownload"/>
+            </feature>
+        </config-file>
+        <source-file src="src/android/BackgroundDownload.java" target-dir="src/org/apache/cordova/backgroundDownload" />
+    </platform>
+
     <!-- wp8 -->
     <platform name="wp8">
         <config-file target="config.xml" parent="/*">
