@@ -11,8 +11,8 @@ namespace WPCordovaClassLib.Cordova.Commands
     /// </summary>
     class BackgroundDownload : BaseCommand
     {
-        private string _uri;
-        private string _targetFilePath;
+        private string _uriString;
+        private string _filePath;
         private string _callbackId;
         private BackgroundTransferRequest _transfer;
 
@@ -21,32 +21,34 @@ namespace WPCordovaClassLib.Cordova.Commands
             try
             {
                 var optStings = JSON.JsonHelper.Deserialize<string[]>(options);
-                _uri = optStings[0];
-                _targetFilePath = optStings[1];
+                _uriString = optStings[0];
+                _filePath = optStings[1];
                 _callbackId = optStings[2];
 
-                var requestUri = new Uri(_uri);
+                var requestUri = new Uri(_uriString);
 
-                _transfer = FindTransfer(_targetFilePath);
+                _transfer = FindTransfer(_filePath);
 
                 if (_transfer == null)
                 {
                     // "shared\transfers" is the only working location for BackgroundTransferService download
-                    // we use temporary file name to download content and then move downloaded file to the right location
+                    // we use temporary file name to download content and then move downloaded file to the requested location
                     var downloadLocation = new Uri(@"\shared\transfers\" + Guid.NewGuid(), UriKind.Relative);
 
                     _transfer = new BackgroundTransferRequest(requestUri, downloadLocation);
 
                     // Tag is used to make sure we run single background transfer for this file
-                    _transfer.Tag = _targetFilePath;
+                    _transfer.Tag = _filePath;
 
                     BackgroundTransferService.Add(_transfer);
                 }
 
                 if (_transfer.TransferStatus == TransferStatus.Completed)
                 {
-                    DispatchCommandResult(new PluginResult(PluginResult.Status.OK));
+                    // file was already downloaded while we were in background and we didn't report this
+                    MoveFile();
                     BackgroundTransferService.Remove(_transfer);
+                    DispatchCommandResult(new PluginResult(PluginResult.Status.OK));
                 }
                 else
                 {
@@ -61,33 +63,27 @@ namespace WPCordovaClassLib.Cordova.Commands
             }
         }
 
-        private void MoveFile()
+
+        public void stop(string options)
         {
-            // The downloaded content is moved into the right place
-            using (var isoStore = IsolatedStorageFile.GetUserStoreForApplication())
+            try
             {
-                string filename = _targetFilePath;
-                if (isoStore.FileExists(filename))
+
+                if (_transfer != null)
                 {
-                    isoStore.DeleteFile(filename);
+                    var request = BackgroundTransferService.Find(_transfer.RequestId);
+                    if (request != null)
+                    {
+                        // stops transfer and triggers TransferStatusChanged event
+                        BackgroundTransferService.Remove(request);
+                    }
                 }
-                isoStore.MoveFile(_transfer.DownloadLocation.OriginalString, filename);
+
+                DispatchCommandResult(new PluginResult(PluginResult.Status.OK));
             }
-        }
-
-        private void CleanUp()
-        {
-            if (_transfer != null)
+            catch (Exception ex)
             {
-                _transfer.TransferProgressChanged -= ProgressChanged;
-                _transfer.TransferStatusChanged -= TransferStatusChanged;
-
-                if (BackgroundTransferService.Find(_transfer.RequestId) != null)
-                {
-                    BackgroundTransferService.Remove(_transfer);
-                }
-
-                _transfer = null;
+                DispatchCommandResult(new PluginResult(PluginResult.Status.ERROR, ex.Message));
             }
         }
 
@@ -129,25 +125,33 @@ namespace WPCordovaClassLib.Cordova.Commands
             DispatchCommandResult(progressUpdate, _callbackId);
         }
 
-        public  void stop(string options)
+        private void MoveFile()
         {
-            try
+            // The downloaded content is moved into the right place
+            using (var isoStore = IsolatedStorageFile.GetUserStoreForApplication())
             {
-
-                if (_transfer != null)
+                string filename = _filePath;
+                if (isoStore.FileExists(filename))
                 {
-                    var request = BackgroundTransferService.Find(_transfer.RequestId);
-                    if (request != null)
-                    {
-                        BackgroundTransferService.Remove(request);
-                    }
+                    isoStore.DeleteFile(filename);
+                }
+                isoStore.MoveFile(_transfer.DownloadLocation.OriginalString, filename);
+            }
+        }
+
+        private void CleanUp()
+        {
+            if (_transfer != null)
+            {
+                _transfer.TransferProgressChanged -= ProgressChanged;
+                _transfer.TransferStatusChanged -= TransferStatusChanged;
+
+                if (BackgroundTransferService.Find(_transfer.RequestId) != null)
+                {
+                    BackgroundTransferService.Remove(_transfer);
                 }
 
-                DispatchCommandResult(new PluginResult(PluginResult.Status.OK));
-            }
-            catch (Exception ex)
-            {
-                DispatchCommandResult(new PluginResult(PluginResult.Status.ERROR, ex.Message));
+                _transfer = null;
             }
         }
     }
