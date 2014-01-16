@@ -18,12 +18,9 @@
  */
 package org.apache.cordova.backgroundDownload;
 
+import java.io.File;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.UUID;
-
-import android.os.Build;
-import android.webkit.WebSettings.PluginState;
 
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaPlugin;
@@ -42,121 +39,137 @@ import android.net.Uri;
 
 /**
  * Based on DownloadManager which is intended to be used for long-running HTTP
- * download. Suppoer of Android 2.3. (API 9)
+ * downloads. Support of Android 2.3. (API 9) and later
  * http://developer.android.com/reference/android/app/DownloadManager.html
- * 
- * TODO track completeness via BroadcastReceiver instead of timer
- * http://sandersdenardi.com/using-the-android-downloadmanager/
+ * TODO: concurrent downloads support
  */
 public class BackgroundDownload extends CordovaPlugin {
 
     private static final long DOWNLOAD_ID_UNDEFINED = -1;
     private static final long DOWNLOAD_PROGRESS_UPDATE_TIMEOUT = 1000;
-
-    private CallbackContext callbackContext; // The callback context from which we were invoked.
-    private CallbackContext initialCallbackContext; // The callback context from which we started file download command.
-    private Timer progressUpdateTimer = null;
     
-    
-    private String targetFile;
-    private String uri;
-    private long downloadId = DOWNLOAD_ID_UNDEFINED;
-    
+    private String _filePath;
+    private String _uriString;
+    private CallbackContext _callbackContext; // The callback context from which we were invoked.
+    private CallbackContext _callbackContextDownloadStart; // The callback context from which we started file download command.
+    private long _activeDownloadId = DOWNLOAD_ID_UNDEFINED;
+    private Timer _timerProgressUpdate = null;   
+        
     @Override
-    public boolean execute(String action, JSONArray args,
-            CallbackContext callbackContext) throws JSONException {
-
-        this.callbackContext = callbackContext;
+    public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
+        this._callbackContext = callbackContext;
         try {
             
             if (action.equals("startAsync")) {
                 startAsync(args);
                 return true;
             } 
-
             if (action.equals("stop")) {
                stop(args);
                return true;
             }
-            
-            // invalid action
-            return false;
-            
+            return false; // invalid action
         } catch (Exception ex) {
-            this.callbackContext.error(ex.getMessage());
+            this._callbackContext.error(ex.getMessage());
         }
 
         return true;
     }
 
     private void startAsync(JSONArray args) throws JSONException {
-        this.uri = (String) args.get(0);
-        this.targetFile = (String) args.get(1);
-        this.initialCallbackContext = this.callbackContext;
+        this._uriString = (String) args.get(0);
+        this._filePath = (String) args.get(1);
+        this._callbackContextDownloadStart = this._callbackContext;
         
         
-        Uri source = Uri.parse(this.uri);
-        Uri destination = Uri.parse(this.targetFile);
+        Uri source = Uri.parse(this._uriString);
+//        Uri destination = Uri.parse(this.getTemporaryFilePath());
         
+        // attempt to attach to active download for this file (download started and we close/open the app)
+        this._activeDownloadId = findActiveDownload(this._uriString);
+        
+        // new file download request
+        if (this._activeDownloadId == DOWNLOAD_ID_UNDEFINED) {
+            // make sure file does not exist, in other case DownloadManager will fail
+            File targetFile = new File(Uri.parse(_filePath).getPath());
+            targetFile.delete();
+            
+            DownloadManager mgr = (DownloadManager) this.cordova.getActivity().getSystemService(Context.DOWNLOAD_SERVICE);
+            DownloadManager.Request request = new DownloadManager.Request(source);
+            request.setTitle("org.apache.cordova.backgroundDownload plugin");
+            request.setVisibleInDownloadsUi(false);
+            
+            // we use default settings for roaming and network type
+            //request.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI | DownloadManager.Request.NETWORK_MOBILE);
+            //request.setAllowedOverRoaming(false);
+            
+            request.setDestinationUri(Uri.parse(_filePath));
+            
+            this._activeDownloadId = mgr.enqueue(request);
+        } else if (checkDownloadCompleted(this._activeDownloadId)) {
+            return;
+        }
+
+       // required to receive notification when download is completed 
+       cordova.getActivity().registerReceiver(receiver, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));      
+       // custom logic to track file download progress
+       StartProgressTracking();     
+    }
+    
+    private void StartProgressTracking() {
+        
+        // already started
+        if (_timerProgressUpdate != null)  {
+            return;
+        }
         final DownloadManager mgr = (DownloadManager) this.cordova.getActivity().getSystemService(Context.DOWNLOAD_SERVICE);
-        DownloadManager.Request request = new DownloadManager.Request(source);
-        request.setTitle("org.apache.cordova.backgroundDownload plugin");
         
-        request.setDestinationUri(destination);
-        
-        // use default settings for roamin and network type
-        //Restrict the types of networks over which this download may proceed.
-        //request.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI | DownloadManager.Request.NETWORK_MOBILE);
-        //Set whether this download may proceed over a roaming connection.
-        //request.setAllowedOverRoaming(false);
-        
-       cordova.getActivity().registerReceiver(receiver, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
+        _timerProgressUpdate = new Timer();
+        _timerProgressUpdate.schedule(new TimerTask() {          
+            @Override
+                public void run() {
+                DownloadManager.Query q = new DownloadManager.Query();
+                    q.setFilterById(_activeDownloadId);
+                    Cursor cursor = mgr.query(q);
+                    if (cursor.moveToFirst()) {
+                        long bytes_downloaded = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
+                        long bytes_total = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
+                        if (bytes_total != -1) {
+                            long progress = (bytes_downloaded * 100 / bytes_total);                           
+                            try {
+                                JSONObject obj = new JSONObject();
+                                obj.put("progress", progress);
+                                PluginResult progressUpdate = new PluginResult(PluginResult.Status.OK, obj);
+                                progressUpdate.setKeepCallback(true);
+                                _callbackContextDownloadStart.sendPluginResult(progressUpdate);
+                            } catch (JSONException e) {
+                             // TODO Auto-generated catch block
+                             e.printStackTrace();
+                            }
+                        }
+                    }
+                    cursor.close();
+            }
 
-       this.downloadId = mgr.enqueue(request);
-       
-       progressUpdateTimer = new Timer();
-       progressUpdateTimer.schedule(new TimerTask() {          
-           @Override
-               public void run() {
-               DownloadManager.Query q = new DownloadManager.Query();
-                   q.setFilterById(downloadId);
-                   Cursor cursor = mgr.query(q);
-                   if (cursor.moveToFirst()) {
-                       int bytes_downloaded = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
-                       int bytes_total = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
-                       if (bytes_total != -1) {
-                           int progress = (bytes_downloaded * 100 / bytes_total);                           
-                           try {
-                               JSONObject obj = new JSONObject();
-                               obj.put("progress", progress);
-                               PluginResult progressUpdate = new PluginResult(PluginResult.Status.OK, obj);
-                               progressUpdate.setKeepCallback(true);
-                               initialCallbackContext.sendPluginResult(progressUpdate);
-                           } catch (JSONException e) {
-                            // TODO Auto-generated catch block
-                            e.printStackTrace();
-                           }
-                       }
-                   }
-                   cursor.close();
-           }
-
-       }, DOWNLOAD_PROGRESS_UPDATE_TIMEOUT, DOWNLOAD_PROGRESS_UPDATE_TIMEOUT);
-       
+        }, DOWNLOAD_PROGRESS_UPDATE_TIMEOUT, DOWNLOAD_PROGRESS_UPDATE_TIMEOUT);
     }
     
     private void CleanUp () {
-        cordova.getActivity().unregisterReceiver(receiver);
-        
-        if (progressUpdateTimer != null) {
-            progressUpdateTimer.cancel();
-            progressUpdateTimer = null;
+        try {
+            cordova.getActivity().unregisterReceiver(receiver);
+        } catch(IllegalArgumentException e) {
+            // this is fine, receiver was not registered
+        }
+ 
+        if (_timerProgressUpdate != null) {
+            _timerProgressUpdate.cancel();
+            _timerProgressUpdate = null;
         }
         
-        if (downloadId != DOWNLOAD_ID_UNDEFINED) {
+        if (_activeDownloadId != DOWNLOAD_ID_UNDEFINED) {
             DownloadManager mgr = (DownloadManager)cordova.getActivity().getSystemService(Context.DOWNLOAD_SERVICE);
-            mgr.remove(downloadId);
-            downloadId = DOWNLOAD_ID_UNDEFINED;
+            mgr.remove(_activeDownloadId);
+            _activeDownloadId = DOWNLOAD_ID_UNDEFINED;
         }
     }
     
@@ -196,21 +209,21 @@ public class BackgroundDownload extends CordovaPlugin {
     }
 
     private void stop(JSONArray args) {
-       if(downloadId == DOWNLOAD_ID_UNDEFINED) {
-           this.callbackContext.error("donwload requst not found");
+       if(_activeDownloadId == DOWNLOAD_ID_UNDEFINED) {
+           this._callbackContext.error("donwload requst not found");
            return;
        } 
        
        DownloadManager mgr = (DownloadManager)cordova.getActivity().getSystemService(Context.DOWNLOAD_SERVICE);
-       mgr.remove(downloadId);
-       callbackContext.success();                 
+       mgr.remove(_activeDownloadId);
+       _callbackContext.success();                 
     }
 
-    private Boolean isDownloading() {
+    private long findActiveDownload(String uri) {
 
         DownloadManager mgr = (DownloadManager) cordova.getActivity().getSystemService(Context.DOWNLOAD_SERVICE);
         
-        boolean isDownloading = false;
+        long downloadId = DOWNLOAD_ID_UNDEFINED;
         
         DownloadManager.Query query = new DownloadManager.Query();
         query.setFilterByStatus(DownloadManager.STATUS_PAUSED
@@ -218,38 +231,74 @@ public class BackgroundDownload extends CordovaPlugin {
                 | DownloadManager.STATUS_RUNNING
                 | DownloadManager.STATUS_SUCCESSFUL);
         Cursor cur = mgr.query(query);
-        int col = cur.getColumnIndex(DownloadManager.COLUMN_LOCAL_FILENAME);
+        //int idxFileName = cur.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI);
+        int idxId = cur.getColumnIndex(DownloadManager.COLUMN_ID);
+        int idxUri = cur.getColumnIndex(DownloadManager.COLUMN_URI);
         for (cur.moveToFirst(); !cur.isAfterLast(); cur.moveToNext()) {
-            isDownloading = (this.targetFile == cur.getString(col));
+            if (uri.equals(cur.getString(idxUri))){
+                downloadId = cur.getLong(idxId);
+                break;
+            }
         }
         cur.close();
 
-        return isDownloading;
+        return downloadId;
     }
+    
+    private Boolean checkDownloadCompleted(long id) {
+        
+        DownloadManager mgr = (DownloadManager)this.cordova.getActivity().getSystemService(Context.DOWNLOAD_SERVICE);
+        DownloadManager.Query query = new DownloadManager.Query();
+        query.setFilterById(id);
+        Cursor cur = mgr.query(query);
+        int idxStatus = cur.getColumnIndex(DownloadManager.COLUMN_STATUS);
+        //int idxReason = cur.getColumnIndex(DownloadManager.COLUMN_REASON);   
+        //int idxFilePath = cur.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI);
+        if(cur.moveToFirst()) 
+        {
+            int status = cur.getInt(idxStatus);
+            //String fileLocation = cur.getString(idxFilePath);
+            if( status == DownloadManager.STATUS_SUCCESSFUL){ // TODO review what else we can have here
+                _callbackContextDownloadStart.success();
+                CleanUp();
+                return true;
+            } 
+        } 
+        cur.close();
+        
+        return false;
+    }
+    
     private BroadcastReceiver receiver  = new BroadcastReceiver() {
         public void onReceive(Context context, Intent intent) {
-            long receivedID = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L);
-            DownloadManager mgr = (DownloadManager)context.getSystemService(Context.DOWNLOAD_SERVICE);
-            DownloadManager.Query query = new DownloadManager.Query();
-            query.setFilterById(receivedID);
-            Cursor cur = mgr.query(query);
-            int idxStatus = cur.getColumnIndex(DownloadManager.COLUMN_STATUS);
-            int idxReason = cur.getColumnIndex(DownloadManager.COLUMN_REASON);                
-            if(cur.moveToFirst()) 
-            {
-                int status = cur.getInt(idxStatus);
-                int reason = cur.getInt(idxReason);
-                if( status == DownloadManager.STATUS_SUCCESSFUL){
-                    initialCallbackContext.success();
+            try{
+                long receivedID = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L);
+                DownloadManager mgr = (DownloadManager)context.getSystemService(Context.DOWNLOAD_SERVICE);
+                DownloadManager.Query query = new DownloadManager.Query();
+                query.setFilterById(receivedID);
+                Cursor cur = mgr.query(query);
+                int idxStatus = cur.getColumnIndex(DownloadManager.COLUMN_STATUS);
+                int idxReason = cur.getColumnIndex(DownloadManager.COLUMN_REASON);   
+                //int idxFilePath = cur.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI);
+                if(cur.moveToFirst()) 
+                {
+                    int status = cur.getInt(idxStatus);
+                    int reason = cur.getInt(idxReason);
+                    //String fileLocation = cur.getString(idxFilePath);
+                    if( status == DownloadManager.STATUS_SUCCESSFUL){                                                
+                        _callbackContextDownloadStart.success();
+                    } else {
+                        _callbackContextDownloadStart.error("Download operation failed with status " + status + " and reason: " + getUserFriendlyReason(reason));
+                    }
                 } else {
-                    initialCallbackContext.error("Download operation failed with status " + status + " and reason: " + getUserFriendlyReason(reason));
+                    _callbackContextDownloadStart.error("cancelled or terminated");
                 }
-            } else {
-                initialCallbackContext.error("cancelled or terminated");
+                cur.close();
+            } catch(Exception ex) {
+                _callbackContextDownloadStart.error(ex.getMessage());
+            } finally {
+                CleanUp();
             }
-            cur.close();
-            
-            CleanUp();
         }
     };
 }
