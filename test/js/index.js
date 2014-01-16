@@ -78,8 +78,9 @@ var app = {
     },
 
     startDownload: function () {
-        var fileName = "data.json", 
-            uriString = "http://mshare.akvelon.net:8184/data.json";
+
+        var fileName = "PointerEventsCordovaPlugin.wmv", 
+            uriString = "http://media.ch9.ms/ch9/8c03/f4fe2512-59e5-4a07-bded-124b06ac8c03/PointerEventsCordovaPlugin.wmv"; // 38.3 MB test file
 
         window.requestFileSystem(LocalFileSystem.PERSISTENT, 0, function(fileSystem) {
             fileSystem.root.getFile(fileName, { create: true }, function (newFile) {
