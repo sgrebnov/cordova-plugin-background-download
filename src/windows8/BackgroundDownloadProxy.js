@@ -1,4 +1,4 @@
-﻿﻿﻿module.exports = {
+??module.exports = {
     downloadOperationPromise: null, // TODO concurrent operations support
     startAsync: function (success, fail, args) {
         try {
@@ -21,31 +21,35 @@
                 });
             };
 
-            
-            // TODO
-            // After app termination, an app should enumerate all existing DownloadOperation instances at next start-up using
-            // GetCurrentDownloadsAsync. When a Windows Store app using Background Transfer is terminated, incomplete downloads 
-            // will persist in the background. If the app is restarted after termination and operations from the previous
-            // session are not enumerated and re-attached to the current session, they will remain incomplete and continue to occupy resources
-            // http://msdn.microsoft.com/library/windows/apps/br207126
-            // TODO - resume incomplete download instead of triggering a new one
-            // Windows.Networking.BackgroundTransfer.BackgroundDownloader.getCurrentDownloadsAsync().done(function (downloads) {
-            //    for (var i = 0; i < downloads.size; i++) {
-            //        console.log(downloads[i].toString());
-
-            //         // to find existing download
-            //        downloads[i].requestedUri.absoluteUri == uri.absoluteUri
-                    
-            //    }
-            //}, function (error) {
-            //    console.log(error.message);
-            //});
-
-            Windows.Storage.StorageFile.getFileFromPathAsync(resultFilePath).done(
+            var downloadLocation = null;
+            Windows.Storage.StorageFile.getFileFromPathAsync(resultFilePath).then(
                 function (file) {
-                    var downloadOperation = Windows.Networking.BackgroundTransfer.BackgroundDownloader().createDownload(uri, file);
-                    downloadOperationPromise = downloadOperation.startAsync().then(completeHandler, errorHandler, progressHandler);
-                }, errorHandler);
+                    downloadLocation = file;
+                }, errorHandler).then(function () {
+                    return Windows.Networking.BackgroundTransfer.BackgroundDownloader.getCurrentDownloadsAsync();
+                }, errorHandler).then(function (downloads) {
+                    var downloadOperation = null;
+
+                    // After app termination, an app should enumerate all existing DownloadOperation instances at next start-up using
+                    // GetCurrentDownloadsAsync. When a Windows Store app using Background Transfer is terminated, incomplete downloads 
+                    // will persist in the background. If the app is restarted after termination and operations from the previous
+                    // session are not enumerated and re-attached to the current session, they will remain incomplete and continue to occupy resources
+                    // http://msdn.microsoft.com/library/windows/apps/br207126
+                    for (var i = 0; i < downloads.size; i++) {
+                        if (downloads[i].requestedUri.absoluteUri == uri.absoluteUri) {
+                            downloadOperationPromise = downloads[i].attachAsync();
+                            return downloadOperationPromise;
+                        }
+
+                    }
+
+                    // new download
+                    downloadOperation = Windows.Networking.BackgroundTransfer.BackgroundDownloader().createDownload(uri, downloadLocation);
+                    downloadOperationPromise = downloadOperation.startAsync();
+
+                    return downloadOperationPromise;
+
+                }, errorHandler).then(completeHandler, errorHandler, progressHandler);
         } catch(ex) {
             fail(ex);
         }
