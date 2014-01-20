@@ -19,7 +19,7 @@
 */
 
 var exec = require('cordova/exec'),
-    q = require('./q');
+    Promise = require('./Promise');
 
 /**
  * Performs recurrent asynchronous background download operations on a regular basis.
@@ -39,7 +39,7 @@ var DownloadOperation = function (uri, resultFile) {
 */
 DownloadOperation.prototype.startAsync = function() {
 
-    var deferred = q.defer(),
+    var deferral = new Promise.Deferral(),
         me = this,
         successCallback = function(result) {
 
@@ -47,25 +47,23 @@ DownloadOperation.prototype.startAsync = function() {
             // as operation completeness handler
             
             if (result && typeof result.progress != 'undefined') {
-                deferred.notify(result.progress);
+                deferral.notify(result.progress);
             } else {
-                deferred.resolve(result);
+                deferral.resolve(result);
             }
         },
         errorCallback = function(err) {
-            deferred.reject(err);
+            deferral.reject(err);
         };
 
     exec(successCallback, errorCallback, "BackgroundDownload", "startAsync", [this.uri, this.resultFile.fullPath]);
 
-    // Cancel support via custom cancel function:
-    // Q.js does not provide such functionality
-    // https://github.com/angular/angular.js/pull/2452
-    deferred.promise.cancel = function() {
+    // custom mechanism to trigger stop when user cancels pending operation
+    deferral.promise.onCancelled = function () {
         me.stop();
     };
 
-    return deferred.promise;
+    return deferral.promise;
 };
 
 /**

@@ -14,7 +14,7 @@ xmlns:android="http://schemas.android.com/apk/res/android"
 
     <dependency id="org.apache.cordova.file" />
     
-    <js-module src="www/q.js" name="q">
+    <js-module src="www/Promise.js" name="Promise">
     </js-module>
 
     <js-module src="www/BackgroundDownloader.js" name="BackgroundDownloader">

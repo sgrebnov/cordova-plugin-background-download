@@ -46,9 +46,7 @@ var app = {
             // Create a new download operation.
             var download = downloader.createDownload(uriString, targetFile);
             // Start the download and persist the promise to be able to cancel the download.
-            app.downloadPromise = download.startAsync();
-            
-            app.downloadPromise.then(complete, error, progress);
+            app.downloadPromise = download.startAsync().then(complete, error, progress);
 
         } catch(err) {
             console.log('Error: ' + err);
@@ -74,7 +72,7 @@ var app = {
         app.receivedEvent('deviceready');
 
         app.startDownload();
-    },   
+    },
 
     startDownload: function () {
         

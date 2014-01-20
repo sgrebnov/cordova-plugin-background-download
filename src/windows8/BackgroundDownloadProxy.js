@@ -1,4 +1,4 @@
-??module.exports = {
+module.exports = {
     downloadOperationPromise: null, // TODO concurrent operations support
     startAsync: function (success, fail, args) {
         try {
