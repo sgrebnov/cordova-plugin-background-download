@@ -1,4 +1,5 @@
 ﻿/*
+ *
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -22,8 +23,11 @@ var exec = require('cordova/exec'),
     Promise = require('./Promise');
 
 /**
- * Performs recurrent asynchronous background download operations on a regular basis.
-*/
+ * Performs an asynchronous download operation in the background.
+ *
+ * @param {string} uri The location of the resource.
+ * @param {File} resultFile The file that the response will be written to.
+ */
 var DownloadOperation = function (uri, resultFile) {
 
     if (uri == null || resultFile == null) {
@@ -35,8 +39,8 @@ var DownloadOperation = function (uri, resultFile) {
 };
 
 /**
- * Starts download operations.
-*/
+ * Starts an asynchronous download operation.
+ */
 DownloadOperation.prototype.startAsync = function() {
 
     var deferral = new Promise.Deferral(),
@@ -67,10 +71,10 @@ DownloadOperation.prototype.startAsync = function() {
 };
 
 /**
- * Stops download operations.
-*/
+ * Stops a download operation.
+ */
 DownloadOperation.prototype.stop = function() {
-
+    // TODO return promise
     exec(null, null, "BackgroundDownload", "stop", [this.uri]);
 
 };

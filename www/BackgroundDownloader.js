@@ -22,21 +22,21 @@
 var DownloadOperation = require('./DownloadOperation');
 
 /**
- * Initializes a DownloadOperation object that contains the specified Uri and the file that the response is written to
-*/
+ * Initializes a new instance of BackgroundDownloader object.
+ * Used to configure downloads prior to the actual creation of the download operation using CreateDownload.
+ */
 var BackgroundDownloader = function() {
 
 };
 
 /**
- * Initializes a DownloadOperation object that contains the specified Uri and the file that the response is written to
+ * Initializes a DownloadOperation object that contains the specified Uri and the file that the response is written to.
  *
  * @param {string} uri The location of the resource.
- * @param {string} resultFile The file that the response will be written to.
- * @param {int} minTimeInterval The minimum time interval the resouce must be fetched.
-*/
-BackgroundDownloader.prototype.createDownload = function(uri, resultFile, minTimeInterval) {
-    return new DownloadOperation(uri, resultFile, minTimeInterval);
+ * @param {File} resultFile The file that the response will be written to.
+ */
+BackgroundDownloader.prototype.createDownload = function(uri, resultFile) {
+    return new DownloadOperation(uri, resultFile);
 };
 
 module.exports = BackgroundDownloader;

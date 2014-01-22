@@ -19,12 +19,13 @@
  *
  */
 (function (global) {
-    // Provides a mechanism for managing interactions with asynchronous APIs based on Promises.
-    // See 'Asynchronous programming in JavaScript' for more details
-    // http://msdn.microsoft.com/en-us/library/windows/apps/hh700330.aspx
-    // Note. Functionality is limited, support of .then and .cancel methods only, other methods are in progress..
-    // http://msdn.microsoft.com/en-us/library/windows/apps/br211867.aspx
-    
+    /**
+     * Provides a mechanism for managing interactions with asynchronous APIs based on Promises.
+     * See 'Asynchronous programming in JavaScript' for more details
+     * http://msdn.microsoft.com/en-us/library/windows/apps/hh700330.aspx
+     * http://msdn.microsoft.com/en-us/library/windows/apps/br211867.aspx
+     * Note. Functionality is limited, support of .then and .cancel methods only, other methods are in progress.
+     */
     function Promise() {
         this._completeCallbacks = [];
         this._errorCallbacks = [];
