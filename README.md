@@ -4,8 +4,8 @@ API provides an advanced file download functionality that persists beyond app te
 
 **Sample usage**
 
-        var fileName: "PointerEventsCordovaPlugin.wmv",
-            uriString: "http://media.ch9.ms/ch9/8c03/f4fe2512-59e5-4a07-bded-124b06ac8c03/PointerEventsCordovaPlugin.wmv";
+        var fileName = "PointerEventsCordovaPlugin.wmv",
+            uriString = "http://media.ch9.ms/ch9/8c03/f4fe2512-59e5-4a07-bded-124b06ac8c03/PointerEventsCordovaPlugin.wmv";
         
         // open target file for download
         window.requestFileSystem(LocalFileSystem.PERSISTENT, 0, function(fileSystem) {
