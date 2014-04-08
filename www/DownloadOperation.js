@@ -60,7 +60,7 @@ DownloadOperation.prototype.startAsync = function() {
             deferral.reject(err);
         };
 
-    exec(successCallback, errorCallback, "BackgroundDownload", "startAsync", [this.uri, this.resultFile.fullPath]);
+    exec(successCallback, errorCallback, "BackgroundDownload", "startAsync", [this.uri, this.resultFile.toNativeURL()]);
 
     // custom mechanism to trigger stop when user cancels pending operation
     deferral.promise.onCancelled = function () {
