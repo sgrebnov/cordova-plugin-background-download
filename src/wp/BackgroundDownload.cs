@@ -173,7 +173,7 @@ namespace WPCordovaClassLib.Cordova.Commands
             // The downloaded content is moved into the right place
             using (var isoStore = IsolatedStorageFile.GetUserStoreForApplication())
             {
-                string filename = transfer.Tag;
+                string filename = _activDownloads[transfer.Tag].FilePath;
                 if (isoStore.FileExists(filename))
                 {
                     isoStore.DeleteFile(filename);
