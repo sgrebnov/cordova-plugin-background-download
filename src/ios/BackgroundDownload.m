@@ -117,7 +117,9 @@
 - (void)URLSession:(NSURLSession *)session downloadTask:(NSURLSessionDownloadTask *)downloadTask didFinishDownloadingToURL:(NSURL *)location {
     NSFileManager *fileManager = [NSFileManager defaultManager];
     
-    [fileManager removeItemAtPath:_targetFile error: nil];
-    [fileManager createFileAtPath:_targetFile contents:[fileManager contentsAtPath:[location path]] attributes:nil];
+    NSURL *targetURL = [NSURL URLWithString:_targetFile];
+    
+    [fileManager removeItemAtPath:targetURL.path error: nil];
+    [fileManager createFileAtPath:targetURL.path contents:[fileManager contentsAtPath:[location path]] attributes:nil];
 }
 @end
