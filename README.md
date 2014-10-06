@@ -32,4 +32,4 @@ API provides an advanced file download functionality that persists beyond app te
  * Concurrent background downloads are NOT currently supported on iOS.
  * If a download operation was completed when the application was in the background, onSuccess callback is called when the application become active.
  * If a download operation was completed when the application was closed, onSuccess callback is called right after the first startAsync() is called for the same uri, as if the file has been downloaded immediatly.
- * A new download operation for the same uri resumes a pending download instead of triggering a new one. If no pending downloads found for the uri specified, a new download is started, the target file will be automatically overwritten once donwload is comnpleted.
+ * A new download operation for the same uri resumes a pending download instead of triggering a new one. If no pending downloads found for the uri specified, a new download is started, the target file will be automatically overwritten once donwload is completed.
