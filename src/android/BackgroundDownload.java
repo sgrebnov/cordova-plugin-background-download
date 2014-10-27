@@ -208,13 +208,15 @@ public class BackgroundDownload extends CordovaPlugin {
                 q.setFilterById(curDownload.getDownloadId());
                 Cursor cursor = mgr.query(q);
                 if (cursor.moveToFirst()) {
-                    long bytes_downloaded = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
-                    long bytes_total = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
-                    if (bytes_total != -1) {
-                        long progress = (bytes_downloaded * 100 / bytes_total);
+                    long bytesDownloaded = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
+                    long bytesTotal = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
+                    if (bytesTotal != -1) {
                         try {
+                            JSONObject jsonProgress = new JSONObject();
+                            jsonProgress.put("bytesReceived", bytesDownloaded);
+                            jsonProgress.put("totalBytesToReceive", bytesTotal);
                             JSONObject obj = new JSONObject();
-                            obj.put("progress", progress);
+                            obj.put("progress", jsonProgress);
                             PluginResult progressUpdate = new PluginResult(PluginResult.Status.OK, obj);
                             progressUpdate.setKeepCallback(true);
                             curDownload.getCallbackContextDownloadStart().sendPluginResult(progressUpdate);
