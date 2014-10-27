@@ -12,7 +12,10 @@ module.exports = {
             };
             var progressHandler = function (operation) {
 
-                var progress = 100 * operation.progress.bytesReceived / operation.progress.totalBytesToReceive;
+                var progress = {
+                    bytesReceived: operation.progress.bytesReceived,
+                    totalBytesToReceive: operation.progress.totalBytesToReceive
+                };
 
                 success({
                     progress: progress,
