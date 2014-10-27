@@ -63,7 +63,14 @@ xmlns:android="http://schemas.android.com/apk/res/android"
 
     <!-- windows8 -->
     <platform name="windows8">
-        <js-module src="src/windows8/BackgroundDownloadProxy.js" name="BackgroundDownload">
+        <js-module src="src/windows/BackgroundDownloadProxy.js" name="BackgroundDownload">
+            <merges target="" />
+        </js-module>
+    </platform>
+
+     <!-- windows -->
+    <platform name="windows">
+        <js-module src="src/windows/BackgroundDownloadProxy.js" name="BackgroundDownload">
             <merges target="" />
         </js-module>
     </platform>
