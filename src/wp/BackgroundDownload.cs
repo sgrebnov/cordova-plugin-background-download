@@ -163,7 +163,7 @@ namespace WPCordovaClassLib.Cordova.Commands
             var progressUpdate = new PluginResult(PluginResult.Status.OK);
 
             progressUpdate.KeepCallback = true;
-            progressUpdate.Message = String.Format("{{\"progress\":{0}}}", 100 * e.Request.BytesReceived / e.Request.TotalBytesToReceive);
+            progressUpdate.Message = String.Format("{{\"progress\":{{\"bytesReceived\":{0}, \"totalBytesToReceive\":{1} }}}}", e.Request.BytesReceived, e.Request.TotalBytesToReceive);
 
             DispatchCommandResult(progressUpdate, _activDownloads[((BackgroundTransferRequest)sender).Tag].CallbackId);
         }
