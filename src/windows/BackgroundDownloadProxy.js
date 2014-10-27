@@ -4,6 +4,10 @@ module.exports = {
             var uri = new Windows.Foundation.Uri(args[0]),
                 resultFilePath = args[1];
 
+            // Forward slashes (/) are not accepted by getFileFromPathAsync
+            // http://msdn.microsoft.com/en-us/library/windows/apps/windows.storage.storagefile.getfilefrompathasync
+            resultFilePath = resultFilePath.split('/').join('\\');
+
             var completeHandler = function() {
                 success();
             };
