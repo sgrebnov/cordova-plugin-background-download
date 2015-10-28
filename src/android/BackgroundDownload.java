@@ -38,6 +38,8 @@ import android.content.IntentFilter;
 import android.database.Cursor;
 import android.net.Uri;
 
+import android.os.Environment;
+
 /**
  * Based on DownloadManager which is intended to be used for long-running HTTP downloads. Support of Android 2.3. (API 9) and later
  * http://developer.android.com/reference/android/app/DownloadManager.html TODO: concurrent downloads support
@@ -47,6 +49,7 @@ public class BackgroundDownload extends CordovaPlugin {
     private static final long DOWNLOAD_ID_UNDEFINED = -1;
     private static final String TEMP_DOWNLOAD_FILE_EXTENSION = ".temp";
     private static final long DOWNLOAD_PROGRESS_UPDATE_TIMEOUT = 1000;
+    private static final String INTERNAL_APP_PATH = "/data/data/com.cld.ed";
 
     protected class Download {
 
@@ -88,6 +91,7 @@ public class BackgroundDownload extends CordovaPlugin {
         }
 
         public void setTempFilePath(String tempFilePath) {
+            tempFilePath = tempFilePath.replace(INTERNAL_APP_PATH, Environment.getExternalStorageDirectory().toString());
             this.tempFilePath = tempFilePath;
         }
 
@@ -124,7 +128,7 @@ public class BackgroundDownload extends CordovaPlugin {
             this.timerProgressUpdate = TimerProgressUpdate;
         };
     }
-    
+
     HashMap<String, Download> activDownloads = new HashMap<String, Download>();
 
     @Override
@@ -358,7 +362,6 @@ public class BackgroundDownload extends CordovaPlugin {
             int idxURI = cursor.getColumnIndex(DownloadManager.COLUMN_URI);
             cursor.moveToFirst();
             String uri = cursor.getString(idxURI);
-
             Download curDownload = activDownloads.get(uri);
 
             try {
