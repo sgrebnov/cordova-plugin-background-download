@@ -19,6 +19,10 @@
 package org.apache.cordova.backgroundDownload;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.channels.FileChannel;
 import java.util.HashMap;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -37,8 +41,8 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.database.Cursor;
 import android.net.Uri;
-
 import android.os.Environment;
+import android.util.Log;
 
 /**
  * Based on DownloadManager which is intended to be used for long-running HTTP downloads. Support of Android 2.3. (API 9) and later
@@ -50,6 +54,7 @@ public class BackgroundDownload extends CordovaPlugin {
     private static final String TEMP_DOWNLOAD_FILE_EXTENSION = ".temp";
     private static final long DOWNLOAD_PROGRESS_UPDATE_TIMEOUT = 1000;
     private static final String INTERNAL_APP_PATH = "/data/data/com.cld.ed";
+    private static final String TEMP_DOWNLOAD_PATH = Environment.getExternalStorageDirectory().toString() +"/com.cld.ed";
 
     protected class Download {
 
@@ -62,7 +67,7 @@ public class BackgroundDownload extends CordovaPlugin {
         private Timer timerProgressUpdate = null;
 
         public Download(String uriString, String filePath,
-                CallbackContext callbackContext) {
+                        CallbackContext callbackContext) {
             this.setUriString(uriString);
             this.setFilePath(filePath);
             this.setTempFilePath(filePath + TEMP_DOWNLOAD_FILE_EXTENSION);
@@ -91,7 +96,7 @@ public class BackgroundDownload extends CordovaPlugin {
         }
 
         public void setTempFilePath(String tempFilePath) {
-            tempFilePath = tempFilePath.replace(INTERNAL_APP_PATH, Environment.getExternalStorageDirectory().toString());
+            tempFilePath = tempFilePath.replace(INTERNAL_APP_PATH, TEMP_DOWNLOAD_PATH);
             this.tempFilePath = tempFilePath;
         }
 
@@ -149,6 +154,23 @@ public class BackgroundDownload extends CordovaPlugin {
         return true;
     }
 
+    private boolean prepareDirectories(Download download) {
+        String parentDirPath = download.getTempFilePath().replace("file://", "");
+        File fullPath = new File(parentDirPath);
+        File dir = new File(fullPath.getParent());
+
+        if (! dir.exists()) {
+            if (dir.mkdirs()) {
+                return true;
+            } else {
+                Log.e("prepareDirectories", "Failed to prepare directory for " + download.getTempFilePath());
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+
     private void startAsync(JSONArray args, CallbackContext callbackContext) throws JSONException {
         if (activDownloads.size() == 0) {
             // required to receive notification when download is completed
@@ -172,6 +194,10 @@ public class BackgroundDownload extends CordovaPlugin {
             // make sure file does not exist, in other case DownloadManager will fail
             File targetFile = new File(Uri.parse(curDownload.getTempFilePath()).getPath());
             targetFile.delete();
+
+            // Prepare the parent directories of the file being downloaded
+            // If the parent directories don't exists, the download fails
+            prepareDirectories(curDownload);
 
             DownloadManager mgr = (DownloadManager) this.cordova.getActivity().getSystemService(Context.DOWNLOAD_SERVICE);
             DownloadManager.Request request = new DownloadManager.Request(source);
@@ -260,33 +286,33 @@ public class BackgroundDownload extends CordovaPlugin {
     private String getUserFriendlyReason(int reason) {
         String failedReason = "";
         switch (reason) {
-        case DownloadManager.ERROR_CANNOT_RESUME:
-            failedReason = "ERROR_CANNOT_RESUME";
-            break;
-        case DownloadManager.ERROR_DEVICE_NOT_FOUND:
-            failedReason = "ERROR_DEVICE_NOT_FOUND";
-            break;
-        case DownloadManager.ERROR_FILE_ALREADY_EXISTS:
-            failedReason = "ERROR_FILE_ALREADY_EXISTS";
-            break;
-        case DownloadManager.ERROR_FILE_ERROR:
-            failedReason = "ERROR_FILE_ERROR";
-            break;
-        case DownloadManager.ERROR_HTTP_DATA_ERROR:
-            failedReason = "ERROR_HTTP_DATA_ERROR";
-            break;
-        case DownloadManager.ERROR_INSUFFICIENT_SPACE:
-            failedReason = "ERROR_INSUFFICIENT_SPACE";
-            break;
-        case DownloadManager.ERROR_TOO_MANY_REDIRECTS:
-            failedReason = "ERROR_TOO_MANY_REDIRECTS";
-            break;
-        case DownloadManager.ERROR_UNHANDLED_HTTP_CODE:
-            failedReason = "ERROR_UNHANDLED_HTTP_CODE";
-            break;
-        case DownloadManager.ERROR_UNKNOWN:
-            failedReason = "ERROR_UNKNOWN";
-            break;
+            case DownloadManager.ERROR_CANNOT_RESUME:
+                failedReason = "ERROR_CANNOT_RESUME";
+                break;
+            case DownloadManager.ERROR_DEVICE_NOT_FOUND:
+                failedReason = "ERROR_DEVICE_NOT_FOUND";
+                break;
+            case DownloadManager.ERROR_FILE_ALREADY_EXISTS:
+                failedReason = "ERROR_FILE_ALREADY_EXISTS";
+                break;
+            case DownloadManager.ERROR_FILE_ERROR:
+                failedReason = "ERROR_FILE_ERROR";
+                break;
+            case DownloadManager.ERROR_HTTP_DATA_ERROR:
+                failedReason = "ERROR_HTTP_DATA_ERROR";
+                break;
+            case DownloadManager.ERROR_INSUFFICIENT_SPACE:
+                failedReason = "ERROR_INSUFFICIENT_SPACE";
+                break;
+            case DownloadManager.ERROR_TOO_MANY_REDIRECTS:
+                failedReason = "ERROR_TOO_MANY_REDIRECTS";
+                break;
+            case DownloadManager.ERROR_UNHANDLED_HTTP_CODE:
+                failedReason = "ERROR_UNHANDLED_HTTP_CODE";
+                break;
+            case DownloadManager.ERROR_UNKNOWN:
+                failedReason = "ERROR_UNKNOWN";
+                break;
         }
 
         return failedReason;
@@ -312,7 +338,7 @@ public class BackgroundDownload extends CordovaPlugin {
         long downloadId = DOWNLOAD_ID_UNDEFINED;
 
         DownloadManager.Query query = new DownloadManager.Query();
-        query.setFilterByStatus(DownloadManager.STATUS_PAUSED | DownloadManager.STATUS_PENDING | DownloadManager.STATUS_RUNNING    | DownloadManager.STATUS_SUCCESSFUL);
+        query.setFilterByStatus(DownloadManager.STATUS_PAUSED | DownloadManager.STATUS_PENDING | DownloadManager.STATUS_RUNNING | DownloadManager.STATUS_SUCCESSFUL);
         Cursor cur = mgr.query(query);
         int idxId = cur.getColumnIndex(DownloadManager.COLUMN_ID);
         int idxUri = cur.getColumnIndex(DownloadManager.COLUMN_URI);
@@ -393,10 +419,43 @@ public class BackgroundDownload extends CordovaPlugin {
     public void copyTempFileToActualFile(Download curDownload) {
         File sourceFile = new File(Uri.parse(curDownload.getTempFilePath()).getPath());
         File destFile = new File(Uri.parse(curDownload.getFilePath()).getPath());
-        if (sourceFile.renameTo(destFile)) {
+
+        try {
+            copyFile(sourceFile, destFile);
+
+            // Remove the temporary download directory from the external storage
+            File tmpDir = new File(TEMP_DOWNLOAD_PATH);
+            deleteRecursive(tmpDir);
             curDownload.getCallbackContextDownloadStart().success();
-        } else {
+        } catch (IOException e) {
             curDownload.getCallbackContextDownloadStart().error("Cannot copy from temporary path to actual path");
+            e.printStackTrace();
         }
+    }
+
+    private void copyFile(File src, File dest) throws IOException {
+        FileChannel inChannel = new FileInputStream(src).getChannel();
+        FileChannel outChannel = new FileOutputStream(dest).getChannel();
+        try {
+            inChannel.transferTo(0, inChannel.size(), outChannel);
+        } finally {
+            if (inChannel != null) {
+                inChannel.close();
+            }
+            if (outChannel != null) {
+                outChannel.close();
+            }
+        }
+    }
+
+    private boolean deleteRecursive(File path) {
+        if (path.isDirectory()) {
+            for (File file : path.listFiles()) {
+                if (!deleteRecursive(file)) {
+                    return false;
+                }
+            }
+        }
+        return path.delete();
     }
 }
