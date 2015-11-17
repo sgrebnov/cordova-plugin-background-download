@@ -41,6 +41,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Environment;
 import android.util.Log;
 
@@ -195,8 +196,7 @@ public class BackgroundDownload extends CordovaPlugin {
             File targetFile = new File(Uri.parse(curDownload.getTempFilePath()).getPath());
             targetFile.delete();
 
-            // Prepare the parent directories of the file being downloaded
-            // If the parent directories don't exists, the download fails
+            // Prepare the parent directories of the file
             prepareDirectories(curDownload);
 
             DownloadManager mgr = (DownloadManager) this.cordova.getActivity().getSystemService(Context.DOWNLOAD_SERVICE);
@@ -204,8 +204,10 @@ public class BackgroundDownload extends CordovaPlugin {
             request.setTitle("org.apache.cordova.backgroundDownload plugin");
             request.setVisibleInDownloadsUi(false);
 
-            // hide notification. Not compatible with current android api.
-            // request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN);
+            // hide notification.
+            if (Build.VERSION.SDK_INT >= 11) {
+                request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN);
+            }
 
             // we use default settings for roaming and network type
             // request.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI | DownloadManager.Request.NETWORK_MOBILE);
