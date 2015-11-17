@@ -427,7 +427,14 @@ public class BackgroundDownload extends CordovaPlugin {
 
             // Remove the temporary download directory from the external storage
             File tmpDir = new File(TEMP_DOWNLOAD_PATH);
-            deleteRecursive(tmpDir);
+
+            // We rename tmpDir before deleting it to prevent Android filesystem from keeping
+            // a reference to the old directory and locking it after deletion.
+            // http://stackoverflow.com/questions/11539657/open-failed-ebusy-device-or-resource-busy
+            final File renamedTmpDir = new File(tmpDir.getAbsolutePath() + System.currentTimeMillis());
+            tmpDir.renameTo(renamedTmpDir);
+            deleteRecursive(renamedTmpDir);
+
             curDownload.getCallbackContextDownloadStart().success();
         } catch (IOException e) {
             curDownload.getCallbackContextDownloadStart().error("Cannot copy from temporary path to actual path");
