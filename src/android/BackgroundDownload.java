@@ -183,9 +183,11 @@ public class BackgroundDownload extends CordovaPlugin {
     }
 
     private void startAsync(JSONArray args, CallbackContext callbackContext) throws JSONException {
-        if (activDownloads.size() == 0) {
+        try {
             // required to receive notification when download is completed
             cordova.getActivity().registerReceiver(receiver, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
+        } catch (IllegalArgumentException e) {
+            // if already registered, do nothing
         }
 
         Download curDownload = new Download(args.get(0).toString(), args.get(1).toString(), callbackContext);
@@ -220,8 +222,8 @@ public class BackgroundDownload extends CordovaPlugin {
             }
 
             // we use default settings for roaming and network type
-            // request.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI | DownloadManager.Request.NETWORK_MOBILE);
-            // request.setAllowedOverRoaming(false);
+//            request.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI | DownloadManager.Request.NETWORK_MOBILE);
+//            request.setAllowedOverRoaming(false);
 
             request.setDestinationUri(Uri.parse(curDownload.getTempFilePath()));
 
@@ -431,6 +433,8 @@ public class BackgroundDownload extends CordovaPlugin {
     public void copyTempFileToActualFile(Download curDownload) {
         File sourceFile = new File(Uri.parse(curDownload.getTempFilePath()).getPath());
         File destFile = new File(Uri.parse(curDownload.getFilePath()).getPath());
+
+        if (! sourceFile.exists()) return;
 
         try {
             copyFile(sourceFile, destFile);
