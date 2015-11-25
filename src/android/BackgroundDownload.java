@@ -142,15 +142,16 @@ public class BackgroundDownload extends CordovaPlugin {
     public boolean execute(String action, final JSONArray args, final CallbackContext callbackContext) throws JSONException {
         try {
             if (action.equals("startAsync")) {
-                cordova.getThreadPool().execute(new Runnable() {
-                    public void run() {
-                        try {
-                            startAsync(args, callbackContext);
-                        } catch (JSONException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                });
+                startAsync(args, callbackContext);
+//                cordova.getThreadPool().execute(new Runnable() {
+//                    public void run() {
+//                        try {
+//                            startAsync(args, callbackContext);
+//                        } catch (JSONException e) {
+//                            e.printStackTrace();
+//                        }
+//                    }
+//                });
 
                 return true;
             }
@@ -183,11 +184,11 @@ public class BackgroundDownload extends CordovaPlugin {
     }
 
     private void startAsync(JSONArray args, CallbackContext callbackContext) throws JSONException {
-        try {
+
+        if (activDownloads.size() == 0) {
             // required to receive notification when download is completed
+            Log.d("BackgroundDownload", "Registering the receiver");
             cordova.getActivity().registerReceiver(receiver, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
-        } catch (IllegalArgumentException e) {
-            // if already registered, do nothing
         }
 
         Download curDownload = new Download(args.get(0).toString(), args.get(1).toString(), callbackContext);
@@ -197,10 +198,6 @@ public class BackgroundDownload extends CordovaPlugin {
         }
 
         activDownloads.put(curDownload.getUriString(), curDownload);
-        Uri source = Uri.parse(curDownload.getUriString());
-        // Uri destination = Uri.parse(this.getTemporaryFilePath());
-
-        // attempt to attach to active download for this file (download started and we close/open the app)
         curDownload.setDownloadId(findActiveDownload(curDownload.getUriString()));
 
         if (curDownload.getDownloadId() == DOWNLOAD_ID_UNDEFINED) {
@@ -212,28 +209,20 @@ public class BackgroundDownload extends CordovaPlugin {
             prepareDirectories(curDownload);
 
             DownloadManager mgr = (DownloadManager) this.cordova.getActivity().getSystemService(Context.DOWNLOAD_SERVICE);
-            DownloadManager.Request request = new DownloadManager.Request(source);
+            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(curDownload.getUriString()));
             request.setTitle("org.apache.cordova.backgroundDownload plugin");
             request.setVisibleInDownloadsUi(false);
-
-            // hide notification.
             if (Build.VERSION.SDK_INT >= 11) {
                 request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN);
             }
 
-            // we use default settings for roaming and network type
-//            request.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI | DownloadManager.Request.NETWORK_MOBILE);
-//            request.setAllowedOverRoaming(false);
-
             request.setDestinationUri(Uri.parse(curDownload.getTempFilePath()));
-
+            Log.d("BackgroundDownload", "downloading");
             curDownload.setDownloadId(mgr.enqueue(request));
-
-        } else if (checkDownloadCompleted(curDownload.getDownloadId())) {
-            return;
+        } else if (checkDownloadCompleted(curDownload.getDownloadId())){
+            callbackContext.success();
         }
 
-        // custom logic to track file download progress
         StartProgressTracking(curDownload);
     }
 
@@ -255,6 +244,7 @@ public class BackgroundDownload extends CordovaPlugin {
                     long bytesDownloaded = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
                     long bytesTotal = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
                     if (bytesTotal != -1) {
+                        Log.d("BackgroundDownload", "DOWNLOAD STARTED for " + curDownload.getDownloadId());
                         try {
                             JSONObject jsonProgress = new JSONObject();
                             jsonProgress.put("bytesReceived", bytesDownloaded);
@@ -268,6 +258,11 @@ public class BackgroundDownload extends CordovaPlugin {
                             // TODO Auto-generated catch block
                             e.printStackTrace();
                         }
+                    } else {
+                        long status = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS));
+                        long reason = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_REASON));
+                        Log.d("BackgroundDownload", "download not started for " + curDownload.getTempFilePath()
+                                + " (status " + status + ") (reason " + reason + ")");
                     }
                 }
                 cursor.close();
@@ -276,7 +271,6 @@ public class BackgroundDownload extends CordovaPlugin {
     }
 
     private void CleanUp(Download curDownload) {
-
         if (curDownload.getTimerProgressUpdate() != null) {
             curDownload.getTimerProgressUpdate().cancel();
         }
@@ -346,7 +340,6 @@ public class BackgroundDownload extends CordovaPlugin {
     }
 
     private long findActiveDownload(String uri) {
-
         DownloadManager mgr = (DownloadManager) cordova.getActivity().getSystemService(Context.DOWNLOAD_SERVICE);
 
         long downloadId = DOWNLOAD_ID_UNDEFINED;
@@ -392,7 +385,7 @@ public class BackgroundDownload extends CordovaPlugin {
 
     private BroadcastReceiver receiver = new BroadcastReceiver() {
         public void onReceive(Context context, Intent intent) {
-
+            Log.d("BackgroundDownload", "recevied an intent " + intent.getAction());
             DownloadManager mgr = (DownloadManager) context.getSystemService(Context.DOWNLOAD_SERVICE);
 
             long downloadId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
@@ -415,6 +408,7 @@ public class BackgroundDownload extends CordovaPlugin {
                     int reason = cursor.getInt(idxReason);
                     if (status == DownloadManager.STATUS_SUCCESSFUL) {
                         copyTempFileToActualFile(curDownload);
+                        curDownload.getCallbackContextDownloadStart().success();
                     } else {
                         curDownload.getCallbackContextDownloadStart().error("Download operation failed with status " + status + " and reason: "    + getUserFriendlyReason(reason));
                     }
@@ -441,15 +435,16 @@ public class BackgroundDownload extends CordovaPlugin {
 
             // Remove the temporary download directory from the external storage
             File tmpDir = new File(TEMP_DOWNLOAD_PATH);
+            deleteRecursive(tmpDir);
 
             // We rename tmpDir before deleting it to prevent Android filesystem from keeping
             // a reference to the old directory and locking it after deletion.
             // http://stackoverflow.com/questions/11539657/open-failed-ebusy-device-or-resource-busy
-            final File renamedTmpDir = new File(tmpDir.getAbsolutePath() + System.currentTimeMillis());
-            tmpDir.renameTo(renamedTmpDir);
-            deleteRecursive(renamedTmpDir);
+            // Not used at the moment because doing so holds up the download in Android 6
+//            final File renamedTmpDir = new File(tmpDir.getAbsolutePath() + System.currentTimeMillis());
+//            tmpDir.renameTo(renamedTmpDir);
+//            deleteRecursive(renamedTmpDir);
 
-            curDownload.getCallbackContextDownloadStart().success();
         } catch (IOException e) {
             curDownload.getCallbackContextDownloadStart().error("Cannot copy from temporary path to actual path");
             Log.e("BackgroundDownload", "Error occurred while copying the file");
