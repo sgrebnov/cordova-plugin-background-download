@@ -271,6 +271,10 @@ public class BackgroundDownload extends CordovaPlugin {
     }
 
     private void CleanUp(Download curDownload) {
+        if (curDownload == null) {
+            return;
+        }
+
         if (curDownload.getTimerProgressUpdate() != null) {
             curDownload.getTimerProgressUpdate().cancel();
         }
