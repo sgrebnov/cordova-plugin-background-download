@@ -438,8 +438,8 @@ public class BackgroundDownload extends CordovaPlugin {
             copyFile(sourceFile, destFile);
 
             // Remove the temporary download directory from the external storage
-            File tmpDir = new File(TEMP_DOWNLOAD_PATH);
-            deleteRecursive(tmpDir);
+            // File tmpDir = new File(TEMP_DOWNLOAD_PATH);
+            // deleteRecursive(tmpDir);
 
             // We rename tmpDir before deleting it to prevent Android filesystem from keeping
             // a reference to the old directory and locking it after deletion.
