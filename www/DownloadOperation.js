@@ -45,6 +45,7 @@ DownloadOperation.prototype.startAsync = function() {
 
     var deferral = new Promise.Deferral(),
         me = this,
+        destination = this.resultFile.toURL ? this.resultFile.toURL() : this.resultFile,
         successCallback = function(result) {
 
             // success callback is used to both report operation progress and 
@@ -60,7 +61,8 @@ DownloadOperation.prototype.startAsync = function() {
             deferral.reject(err);
         };
 
-    exec(successCallback, errorCallback, "BackgroundDownload", "startAsync", [this.uri, this.resultFile.toURL()]);
+
+    exec(successCallback, errorCallback, "BackgroundDownload", "startAsync", [this.uri, destination]);
 
     // custom mechanism to trigger stop when user cancels pending operation
     deferral.promise.onCancelled = function () {
