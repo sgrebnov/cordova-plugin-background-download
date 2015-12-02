@@ -263,6 +263,13 @@ public class BackgroundDownload extends CordovaPlugin {
                         long reason = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_REASON));
                         Log.d("BackgroundDownload", "download not started for " + curDownload.getTempFilePath()
                                 + " (status " + status + ") (reason " + reason + ")");
+                        if (reason == 404) {
+                            try {
+                                cordova.getActivity().unregisterReceiver(receiver);
+                            } catch (Exception e) {
+                                // Noop
+                            }
+                        }
                     }
                 }
                 cursor.close();
@@ -398,7 +405,9 @@ public class BackgroundDownload extends CordovaPlugin {
             Cursor cursor = mgr.query(query);
             int idxURI = cursor.getColumnIndex(DownloadManager.COLUMN_URI);
             cursor.moveToFirst();
+            if (cursor.getCount() == 0) return;
             String uri = cursor.getString(idxURI);
+
             Download curDownload = activDownloads.get(uri);
 
             try {
