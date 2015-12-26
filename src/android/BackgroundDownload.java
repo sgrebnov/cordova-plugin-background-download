@@ -297,8 +297,7 @@ public class BackgroundDownload extends CordovaPlugin {
             return;
         }
 
-        DownloadManager mgr = (DownloadManager) cordova.getActivity().getSystemService(Context.DOWNLOAD_SERVICE);
-        mgr.remove(curDownload.getDownloadId());
+        CleanUp(curDownload);
         callbackContext.success();
     }
 
