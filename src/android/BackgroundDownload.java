@@ -125,7 +125,7 @@ public class BackgroundDownload extends CordovaPlugin {
             this.timerProgressUpdate = TimerProgressUpdate;
         };
     }
-    
+
     HashMap<String, Download> activDownloads = new HashMap<String, Download>();
 
     @Override
@@ -155,7 +155,16 @@ public class BackgroundDownload extends CordovaPlugin {
         Download curDownload = new Download(args.get(0).toString(), args.get(1).toString(), callbackContext);
 
         if (activDownloads.containsKey(curDownload.getUriString())) {
-            return;
+            if (args.length() >= 4) {
+                boolean resumeCurrent = args.getBoolean(3);
+
+                if (resumeCurrent) {
+                    StartProgressTracking(curDownload);
+                    return;
+                }
+            } else {
+                return;
+            }
         }
 
         activDownloads.put(curDownload.getUriString(), curDownload);
@@ -412,3 +421,4 @@ public class BackgroundDownload extends CordovaPlugin {
         }
     }
 }
+
