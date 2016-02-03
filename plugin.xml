@@ -2,7 +2,7 @@
 
 <plugin xmlns="http://apache.org/cordova/ns/plugins/1.0"
 xmlns:android="http://schemas.android.com/apk/res/android"
-           id="org.apache.cordova.background-download"
+           id="cordova-plugin-background-download"
       version="0.0.2">
     <name>Background Download</name>
 
@@ -12,15 +12,15 @@ xmlns:android="http://schemas.android.com/apk/res/android"
     <repo>TODO</repo>
     <issue>TODO</issue>
 
-    <dependency id="org.apache.cordova.file" />
-    
+    <dependency id="cordova-plugin-file" />
+
     <js-module src="www/Promise.js" name="Promise">
     </js-module>
 
     <js-module src="www/BackgroundDownloader.js" name="BackgroundDownloader">
         <clobbers target="BackgroundTransfer.BackgroundDownloader" />
     </js-module>
-    
+
     <js-module src="www/DownloadOperation.js" name="DownloadOperation">
         <clobbers target="DownloadOperation" />
     </js-module>
