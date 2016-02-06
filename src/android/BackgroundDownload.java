@@ -36,6 +36,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.database.Cursor;
+import android.database.CursorIndexOutOfBoundsException;
 import android.net.Uri;
 
 /**
@@ -124,7 +125,7 @@ public class BackgroundDownload extends CordovaPlugin {
             this.timerProgressUpdate = TimerProgressUpdate;
         };
     }
-    
+
     HashMap<String, Download> activDownloads = new HashMap<String, Download>();
 
     @Override
@@ -154,7 +155,16 @@ public class BackgroundDownload extends CordovaPlugin {
         Download curDownload = new Download(args.get(0).toString(), args.get(1).toString(), callbackContext);
 
         if (activDownloads.containsKey(curDownload.getUriString())) {
-            return;
+            if (args.length() >= 4) {
+                boolean resumeCurrent = args.getBoolean(3);
+
+                if (resumeCurrent) {
+                    StartProgressTracking(curDownload);
+                    return;
+                }
+            } else {
+                return;
+            }
         }
 
         activDownloads.put(curDownload.getUriString(), curDownload);
@@ -171,7 +181,13 @@ public class BackgroundDownload extends CordovaPlugin {
 
             DownloadManager mgr = (DownloadManager) this.cordova.getActivity().getSystemService(Context.DOWNLOAD_SERVICE);
             DownloadManager.Request request = new DownloadManager.Request(source);
-            request.setTitle("org.apache.cordova.backgroundDownload plugin");
+            String title = "org.apache.cordova.backgroundDownload plugin";
+
+            if (args.length() >= 3) {
+                title = args.get(2).toString();
+            }
+
+            request.setTitle(title);
             request.setVisibleInDownloadsUi(false);
 
             // hide notification. Not compatible with current android api.
@@ -296,8 +312,7 @@ public class BackgroundDownload extends CordovaPlugin {
             return;
         }
 
-        DownloadManager mgr = (DownloadManager) cordova.getActivity().getSystemService(Context.DOWNLOAD_SERVICE);
-        mgr.remove(curDownload.getDownloadId());
+        CleanUp(curDownload);
         callbackContext.success();
     }
 
@@ -357,7 +372,16 @@ public class BackgroundDownload extends CordovaPlugin {
             Cursor cursor = mgr.query(query);
             int idxURI = cursor.getColumnIndex(DownloadManager.COLUMN_URI);
             cursor.moveToFirst();
-            String uri = cursor.getString(idxURI);
+            String uri;
+
+            try {
+                uri = cursor.getString(idxURI);
+            } catch (CursorIndexOutOfBoundsException e) {
+                // Already removed from the list / list is empty due to cancellation
+                // Can't do anything else since there's no DL to get
+                // context from.
+                return;
+            }
 
             Download curDownload = activDownloads.get(uri);
 
@@ -397,3 +421,4 @@ public class BackgroundDownload extends CordovaPlugin {
         }
     }
 }
+
