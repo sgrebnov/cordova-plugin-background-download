@@ -36,6 +36,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.database.Cursor;
+import android.database.CursorIndexOutOfBoundsException;
+
 import android.net.Uri;
 
 /**
@@ -357,10 +359,18 @@ public class BackgroundDownload extends CordovaPlugin {
             Cursor cursor = mgr.query(query);
             int idxURI = cursor.getColumnIndex(DownloadManager.COLUMN_URI);
             cursor.moveToFirst();
-            String uri = cursor.getString(idxURI);
+            String uri;
+
+            try {
+                uri = cursor.getString(idxURI);
+            } catch (CursorIndexOutOfBoundsException e) {
+                // Already removed from the list / list is empty due to cancellation
+                // Can't do anything else since there's no DL to get
+                // context from.
+                return;
+            }
 
             Download curDownload = activDownloads.get(uri);
-
             try {
                 long receivedID = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L);
                 query.setFilterById(receivedID);
