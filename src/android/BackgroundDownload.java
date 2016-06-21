@@ -180,8 +180,10 @@ public class BackgroundDownload extends CordovaPlugin {
             // we use default settings for roaming and network type
             // request.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI | DownloadManager.Request.NETWORK_MOBILE);
             // request.setAllowedOverRoaming(false);
-
-            request.setDestinationUri(Uri.parse(curDownload.getTempFilePath()));
+			File file = new File(curDownload.getTempFilePath());  
+            Uri dstUri = Uri.fromFile(file);  
+            request.setDestinationUri(dstUri);  
+           // request.setDestinationUri(Uri.parse(curDownload.getTempFilePath()));
 
             curDownload.setDownloadId(mgr.enqueue(request));
 
