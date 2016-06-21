@@ -167,7 +167,7 @@ public class BackgroundDownload extends CordovaPlugin {
         if (curDownload.getDownloadId() == DOWNLOAD_ID_UNDEFINED) {
             // make sure file does not exist, in other case DownloadManager will fail
             File targetFile = new File(Uri.parse(curDownload.getTempFilePath()).getPath());
-            targetFile.delete();
+           // targetFile.delete();
 
             DownloadManager mgr = (DownloadManager) this.cordova.getActivity().getSystemService(Context.DOWNLOAD_SERVICE);
             DownloadManager.Request request = new DownloadManager.Request(source);
