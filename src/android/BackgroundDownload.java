@@ -141,7 +141,7 @@ public class BackgroundDownload extends CordovaPlugin {
             }
             if (action.equals("stop")) {
                 stop(args, callbackContext);
-                return true;
+                return true;  
             }
             return false; // invalid action
         } catch (Exception ex) {
