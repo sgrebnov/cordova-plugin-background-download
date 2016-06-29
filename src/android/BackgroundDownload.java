@@ -176,7 +176,7 @@ public class BackgroundDownload extends CordovaPlugin {
 
             DownloadManager mgr = (DownloadManager) this.cordova.getActivity().getSystemService(Context.DOWNLOAD_SERVICE);
             DownloadManager.Request request = new DownloadManager.Request(source);
-            request.setTitle("quxiaowai");//org.apache.cordova.backgroundDownload plugin");
+            request.setTitle("quxiaowai.apk");//org.apache.cordova.backgroundDownload plugin");
             request.setVisibleInDownloadsUi(false);
 
             // hide notification. Not compatible with current android api.
@@ -190,7 +190,7 @@ public class BackgroundDownload extends CordovaPlugin {
             // request.setDestinationUri(dstUri);  
            // request.setDestinationUri(Uri.parse(curDownload.getTempFilePath()));
 		   // request.setMimeType("application/vnd.android.package-archive");
-			request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "quxiaowai2.apk");
+			request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "quxiaowai.apk");
 			Log.e("quxiaowaiDebug", "setDest="+Environment.DIRECTORY_DOWNLOADS);
 			
             curDownload.setDownloadId(mgr.enqueue(request));
@@ -457,18 +457,7 @@ public class BackgroundDownload extends CordovaPlugin {
     }
 
     public void copyTempFileToActualFile(Download curDownload) {
-		/*
-		intent = new Intent(Intent.ACTION_VIEW);
-						intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-						//intent.setDataAndType(Uri.fromFile(new File(Environment.getExternalStorageDirectory() + "/quxiaowai2.apk")),
-						Log.e("quxiaowaiDebug", "uri="+uri);
-						Log.e("quxiaowaiDebug", "out="+Environment.getExternalStorageDirectory() + "/quxiaowai2.apk");
-						String downloadDirPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).getAbsolutePath()+"/quxiaowai2.apk"; 
-						Log.e("quxiaowaiDebug", "downloadDirPath="+downloadDirPath);
-						intent.setDataAndType(Uri.fromFile(new File(downloadDirPath)),"application/vnd.android.package-archive");
-						cordova.getActivity().startActivity(intent);
-						*/
-		String downloadDirPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).getAbsolutePath()+"/quxiaowai2.apk"; 
+		String downloadDirPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).getAbsolutePath()+"/quxiaowai.apk"; 
 		Log.e("quxiaowaiDebug", "downloadDirPath="+downloadDirPath);
         File sourceFile = new File(downloadDirPath);
         File destFile = new File(Uri.parse(curDownload.getFilePath()).getPath());
