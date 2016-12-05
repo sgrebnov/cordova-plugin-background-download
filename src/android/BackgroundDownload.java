@@ -376,7 +376,6 @@ public class BackgroundDownload extends CordovaPlugin {
                 query.setFilterById(receivedID);
                 int idxStatus = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS);
                 int idxReason = cursor.getColumnIndex(DownloadManager.COLUMN_REASON);
-                int idxFileName = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_FILENAME);
                 int idxFileUrl = cursor.getColumnIndex(DownloadManager.COLUMN_URI);
                 
                 if (cursor.moveToFirst()) {
@@ -385,7 +384,7 @@ public class BackgroundDownload extends CordovaPlugin {
                     
                     JSONObject jsonSuccessResponse = new JSONObject();
                     String savedFilePath = cursor.getString(idxFileName);
-                    String url = cursor.getString(idxFileUrl);
+                    String url = Uri.parse(curDownload.getFilePath()).getPath();
                     jsonSuccessResponse.put("savedFilePath", savedFilePath);
                     jsonSuccessResponse.put("url", url);
                     JSONObject obj = new JSONObject();
