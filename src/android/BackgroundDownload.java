@@ -180,7 +180,7 @@ public class BackgroundDownload extends CordovaPlugin {
             request.setVisibleInDownloadsUi(false);
 
             // hide notification. Not compatible with current android api.
-            // request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN);
+            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN);
 
             // we use default settings for roaming and network type
             // request.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI | DownloadManager.Request.NETWORK_MOBILE);
@@ -303,6 +303,7 @@ public class BackgroundDownload extends CordovaPlugin {
 
         DownloadManager mgr = (DownloadManager) cordova.getActivity().getSystemService(Context.DOWNLOAD_SERVICE);
         mgr.remove(curDownload.getDownloadId());
+        CleanUp(curDownload);
         callbackContext.success();
     }
 
@@ -376,6 +377,7 @@ public class BackgroundDownload extends CordovaPlugin {
                 query.setFilterById(receivedID);
                 int idxStatus = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS);
                 int idxReason = cursor.getColumnIndex(DownloadManager.COLUMN_REASON);
+                //ContentResolver.openFileDescriptor()
                 int idxFileUrl = cursor.getColumnIndex(DownloadManager.COLUMN_URI);
                 
                 if (cursor.moveToFirst()) {
@@ -383,8 +385,8 @@ public class BackgroundDownload extends CordovaPlugin {
                     int reason = cursor.getInt(idxReason);
                     
                     JSONObject jsonSuccessResponse = new JSONObject();
-                    String savedFilePath = cursor.getString(idxFileName);
-                    String url = Uri.parse(curDownload.getFilePath()).getPath();
+                    String savedFilePath = Uri.parse(curDownload.getFilePath()).getPath();
+                    String url = cursor.getString(idxFileUrl);
                     jsonSuccessResponse.put("savedFilePath", savedFilePath);
                     jsonSuccessResponse.put("url", url);
                     JSONObject obj = new JSONObject();
