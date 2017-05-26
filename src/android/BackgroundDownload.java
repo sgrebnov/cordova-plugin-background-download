@@ -18,10 +18,14 @@
  */
 package org.apache.cordova.backgroundDownload;
 
-import java.io.File;
-import java.util.HashMap;
-import java.util.Timer;
-import java.util.TimerTask;
+import android.app.DownloadManager;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.database.Cursor;
+import android.net.Uri;
+import android.util.Log;
 
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaPlugin;
@@ -30,13 +34,14 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import android.app.DownloadManager;
-import android.content.BroadcastReceiver;
-import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
-import android.database.Cursor;
-import android.net.Uri;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.util.HashMap;
+import java.util.Timer;
+import java.util.TimerTask;
 
 /**
  * Based on DownloadManager which is intended to be used for long-running HTTP downloads. Support of Android 2.3. (API 9) and later
@@ -175,7 +180,7 @@ public class BackgroundDownload extends CordovaPlugin {
             request.setVisibleInDownloadsUi(false);
 
             // hide notification. Not compatible with current android api.
-            // request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN);
+            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN);
 
             // we use default settings for roaming and network type
             // request.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI | DownloadManager.Request.NETWORK_MOBILE);
@@ -298,6 +303,7 @@ public class BackgroundDownload extends CordovaPlugin {
 
         DownloadManager mgr = (DownloadManager) cordova.getActivity().getSystemService(Context.DOWNLOAD_SERVICE);
         mgr.remove(curDownload.getDownloadId());
+        CleanUp(curDownload);
         callbackContext.success();
     }
 
@@ -357,6 +363,11 @@ public class BackgroundDownload extends CordovaPlugin {
             Cursor cursor = mgr.query(query);
             int idxURI = cursor.getColumnIndex(DownloadManager.COLUMN_URI);
             cursor.moveToFirst();
+            
+            if(cursor.getCount()==0) {
+                return;
+            }
+            
             String uri = cursor.getString(idxURI);
 
             Download curDownload = activDownloads.get(uri);
@@ -366,14 +377,31 @@ public class BackgroundDownload extends CordovaPlugin {
                 query.setFilterById(receivedID);
                 int idxStatus = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS);
                 int idxReason = cursor.getColumnIndex(DownloadManager.COLUMN_REASON);
-
+                //ContentResolver.openFileDescriptor()
+                int idxFileUrl = cursor.getColumnIndex(DownloadManager.COLUMN_URI);
+                
                 if (cursor.moveToFirst()) {
                     int status = cursor.getInt(idxStatus);
                     int reason = cursor.getInt(idxReason);
+                    
+                    JSONObject jsonSuccessResponse = new JSONObject();
+                    String savedFilePath = Uri.parse(curDownload.getFilePath()).getPath();
+                    String url = cursor.getString(idxFileUrl);
+                    jsonSuccessResponse.put("savedFilePath", savedFilePath);
+                    jsonSuccessResponse.put("url", url);
+                    JSONObject obj = new JSONObject();
+                    obj.put("fileData", jsonSuccessResponse);
+                    
                     if (status == DownloadManager.STATUS_SUCCESSFUL) {
                         copyTempFileToActualFile(curDownload);
+                        CleanUp(curDownload);
+                        PluginResult progressUpdate = new PluginResult(PluginResult.Status.OK, obj);
+                        progressUpdate.setKeepCallback(true);
+                        curDownload.getCallbackContextDownloadStart().sendPluginResult(progressUpdate);
                     } else {
-                        curDownload.getCallbackContextDownloadStart().error("Download operation failed with status " + status + " and reason: "    + getUserFriendlyReason(reason));
+                        obj.put("message", "Download operation failed with status " + status + " and reason: " + getUserFriendlyReason(reason));
+                        obj.put("reason", reason);
+                        curDownload.getCallbackContextDownloadStart().error(obj);
                     }
                 } else {
                     curDownload.getCallbackContextDownloadStart().error("cancelled or terminated");
@@ -390,10 +418,31 @@ public class BackgroundDownload extends CordovaPlugin {
     public void copyTempFileToActualFile(Download curDownload) {
         File sourceFile = new File(Uri.parse(curDownload.getTempFilePath()).getPath());
         File destFile = new File(Uri.parse(curDownload.getFilePath()).getPath());
-        if (sourceFile.renameTo(destFile)) {
-            curDownload.getCallbackContextDownloadStart().success();
-        } else {
+
+        if (! sourceFile.exists()) return;
+
+        try {
+            copyFile(sourceFile, destFile);
+
+        } catch (IOException e) {
             curDownload.getCallbackContextDownloadStart().error("Cannot copy from temporary path to actual path");
+            Log.e("BackgroundDownload", "Error occurred while copying the file");
+            e.printStackTrace();
+        }
+    }
+
+    private void copyFile(File src, File dest) throws IOException {
+        FileChannel inChannel = new FileInputStream(src).getChannel();
+        FileChannel outChannel = new FileOutputStream(dest).getChannel();
+        try {
+            inChannel.transferTo(0, inChannel.size(), outChannel);
+        } finally {
+            if (inChannel != null) {
+                inChannel.close();
+            }
+            if (outChannel != null) {
+                outChannel.close();
+            }
         }
     }
 }

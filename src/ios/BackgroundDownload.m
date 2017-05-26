@@ -19,46 +19,66 @@
 
 #import "BackgroundDownload.h"
 
+NSString *const FLTDownloadQueue = @"FLTDownloadQueue";
+
 @implementation BackgroundDownload {
     bool ignoreNextError;
 }
 
 @synthesize session;
-@synthesize downloadTask;
+@synthesize currentDownloadTask;
 
 - (void)startAsync:(CDVInvokedUrlCommand*)command
 {
-    self.downloadUri = [command.arguments objectAtIndex:0];
-    self.targetFile = [command.arguments objectAtIndex:1];
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        NSURLSessionConfiguration *defaultConfigObject = [NSURLSessionConfiguration defaultSessionConfiguration];
+        session = [NSURLSession sessionWithConfiguration: defaultConfigObject delegate: self delegateQueue: nil];
+        
+        [[NSUserDefaults standardUserDefaults] removeObjectForKey:FLTDownloadQueue];
+        [[NSUserDefaults standardUserDefaults] synchronize];
+    });
     
+    NSString* downloadUri = [command.arguments objectAtIndex:0];
+    self.targetFile = [command.arguments objectAtIndex:1];
     self.callbackId = command.callbackId;
     
-    NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:self.downloadUri]];
+    NSURLRequest* request = [NSURLRequest requestWithURL:[NSURL URLWithString:downloadUri]];
     
-    ignoreNextError = NO;
+    NSURLSessionDownloadTask* dataTask = [session downloadTaskWithRequest:request];
     
-    session = [self backgroundSession];
+    NSArray* array = [[NSUserDefaults standardUserDefaults] valueForKey:FLTDownloadQueue];
     
-    [session getTasksWithCompletionHandler:^(NSArray *dataTasks, NSArray *uploadTasks, NSArray *downloadTasks) {
-        if (downloadTasks.count > 0) {
-            downloadTask = downloadTasks[0];
-        } else {
-            downloadTask = [session downloadTaskWithRequest:request];
-        }
-        [downloadTask resume];
-    }];
+    if (array.count > 0)
+    {
+        NSMutableArray* mutArray = [NSMutableArray arrayWithArray:array];
+        [mutArray addObject:@{@"taskIdentifier" : [@(dataTask.taskIdentifier) stringValue],
+                              @"url" : [command.arguments objectAtIndex:0],
+                              @"savedFilePath" : [command.arguments objectAtIndex:1],
+                              @"callbackId" : command.callbackId,
+                              @"message" : @""}];
+        array = [NSArray arrayWithArray:mutArray];
+    }
+    else
+    {
+        array = @[@{@"taskIdentifier" : [@(dataTask.taskIdentifier) stringValue],
+                    @"url" : [command.arguments objectAtIndex:0],
+                    @"savedFilePath" : [command.arguments objectAtIndex:1],
+                    @"callbackId" : command.callbackId,
+                    @"message" : @""}];
+    }
     
+    [[NSUserDefaults standardUserDefaults] setObject:array forKey:FLTDownloadQueue];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    
+    [dataTask resume];
 }
 
 - (NSURLSession *)backgroundSession
 {
-    static NSURLSession *backgroundSession = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        NSURLSessionConfiguration *config = [NSURLSessionConfiguration backgroundSessionConfigurationWithIdentifier:@"com.cordova.plugin.BackgroundDownload.BackgroundSession"];
-        backgroundSession = [NSURLSession sessionWithConfiguration:config delegate:self delegateQueue:nil];
-    });
-    return backgroundSession;
+    NSURLSessionConfiguration *defaultConfigObject = [NSURLSessionConfiguration defaultSessionConfiguration];
+    NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration: defaultConfigObject delegate: self delegateQueue: nil];
+    return defaultSession;
 }
 
 - (void)stop:(CDVInvokedUrlCommand*)command
@@ -72,12 +92,13 @@
         pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Arg was null"];
     }
     
-    [downloadTask cancel];
+    [currentDownloadTask cancel];
     
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
-- (void)URLSession:(NSURLSession *)session downloadTask:(NSURLSessionDownloadTask *)downloadTask didWriteData:(int64_t)bytesWritten totalBytesWritten:(int64_t)totalBytesWritten totalBytesExpectedToWrite:(int64_t)totalBytesExpectedToWrite {
+- (void)URLSession:(NSURLSession *)session downloadTask:(NSURLSessionDownloadTask *)downloadTask didWriteData:(int64_t)bytesWritten totalBytesWritten:(int64_t)totalBytesWritten totalBytesExpectedToWrite:(int64_t)totalBytesExpectedToWrite
+{
     NSMutableDictionary* progressObj = [NSMutableDictionary dictionaryWithCapacity:1];
     [progressObj setObject:[NSNumber numberWithInteger:totalBytesWritten] forKey:@"bytesReceived"];
     [progressObj setObject:[NSNumber numberWithInteger:totalBytesExpectedToWrite] forKey:@"totalBytesToReceive"];
@@ -88,10 +109,23 @@
     [self.commandDelegate sendPluginResult:result callbackId:self.callbackId];
 }
 
--(void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error {
+-(void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error
+{
     if (ignoreNextError) {
         ignoreNextError = NO;
         return;
+    }
+    
+    NSArray* array = [[NSUserDefaults standardUserDefaults] valueForKey:FLTDownloadQueue];
+    NSDictionary* dictTask = nil;
+    
+    for (NSDictionary* dict in array)
+    {
+        if ([dict[@"taskIdentifier"] isEqualToString:[@(task.taskIdentifier) stringValue]])
+        {
+            dictTask = dict;
+            break;
+        }
     }
     
     if (error != nil) {
@@ -101,26 +135,75 @@
             // this happens when application is closed when there is pending download, so we try to resume it
             if (resumeData != nil) {
                 ignoreNextError = YES;
-                [downloadTask cancel];
-                downloadTask = [self.session downloadTaskWithResumeData:resumeData];
-                [downloadTask resume];
+                [currentDownloadTask cancel];
+                currentDownloadTask = [self.session downloadTaskWithResumeData:resumeData];
+                [currentDownloadTask resume];
                 return;
             }
         }
-        CDVPluginResult* errorResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:[error localizedDescription]];
-        [self.commandDelegate sendPluginResult:errorResult callbackId:self.callbackId];
-    } else {
-        CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
-        [self.commandDelegate sendPluginResult:pluginResult callbackId:self.callbackId];
+        
+        NSDictionary* response = @{@"fileData" : @{@"savedFilePath" : dictTask[@"savedFilePath"]},
+                                   @"message" : [error localizedDescription],
+                                   @"reason" : [NSNumber numberWithInteger:error.code],
+                                   @"url" : dictTask[@"url"]};
+        
+        CDVPluginResult* errorResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsDictionary:response];
+        [errorResult setKeepCallbackAsBool:YES];
+        [self.commandDelegate sendPluginResult:errorResult callbackId:dictTask[@"callbackId"]];
+        return;
+    }
+    
+    CDVCommandStatus commandStatus = CDVCommandStatus_OK;
+    NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *) task.response;
+    
+    if  ([httpResponse statusCode] != 200){
+        commandStatus = CDVCommandStatus_ERROR;
+    }
+    
+    NSDictionary* response = @{@"fileData" : @{@"savedFilePath" : dictTask[@"savedFilePath"],
+                                               @"message" : dictTask[@"message"],
+                                               @"reason" : [NSNumber numberWithInteger:[httpResponse statusCode]],
+                                               @"url" : dictTask[@"url"]}};
+    
+    CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:commandStatus messageAsDictionary:response];
+    [pluginResult setKeepCallbackAsBool:YES];
+    [self.commandDelegate sendPluginResult:pluginResult callbackId:dictTask[@"callbackId"]];
+    
+}
+
+- (void)URLSession:(NSURLSession *)session downloadTask:(NSURLSessionDownloadTask *)downloadTask didFinishDownloadingToURL:(NSURL *)location
+{
+    NSMutableArray* array = [NSMutableArray arrayWithArray:[[NSUserDefaults standardUserDefaults] valueForKey:FLTDownloadQueue]];
+    
+    for (NSDictionary* dict in [array copy])
+    {
+        if ([dict[@"taskIdentifier"] isEqualToString:[@(downloadTask.taskIdentifier) stringValue]])
+        {
+            NSFileManager *fileManager = [NSFileManager defaultManager];
+            NSURL *targetURL = [NSURL URLWithString:dict[@"savedFilePath"]];
+            NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *) downloadTask.response;
+            
+            [fileManager removeItemAtPath:targetURL.path error: nil];
+            
+            if ([httpResponse statusCode] == 200) {
+                [fileManager createFileAtPath:targetURL.path contents:[fileManager contentsAtPath:[location path]] attributes:nil];
+            } else {
+                NSData *fileData = [NSData dataWithContentsOfFile:[location path]];
+                NSError *error = nil;
+                NSDictionary *fileDict = [NSJSONSerialization JSONObjectWithData:fileData options:kNilOptions error:&error];
+                NSMutableDictionary *muteDict = [dict mutableCopy];
+                
+                if (fileDict[@"message"])
+                {
+                    muteDict[@"message"] = fileDict[@"message"];
+                    [array replaceObjectAtIndex:[array indexOfObject:dict] withObject:muteDict];
+                    [[NSUserDefaults standardUserDefaults] setObject:array forKey:FLTDownloadQueue];
+                    [[NSUserDefaults standardUserDefaults] synchronize];
+                }
+            }
+            break;
+        }
     }
 }
 
-- (void)URLSession:(NSURLSession *)session downloadTask:(NSURLSessionDownloadTask *)downloadTask didFinishDownloadingToURL:(NSURL *)location {
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-    
-    NSURL *targetURL = [NSURL URLWithString:_targetFile];
-    
-    [fileManager removeItemAtPath:targetURL.path error: nil];
-    [fileManager createFileAtPath:targetURL.path contents:[fileManager contentsAtPath:[location path]] attributes:nil];
-}
 @end
