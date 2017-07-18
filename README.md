@@ -17,7 +17,9 @@ API provides an advanced file download functionality that persists beyond app te
                 // Create a new download operation.
                 var download = downloader.createDownload(uriString, targetFile);
                 // Start the download and persist the promise to be able to cancel the download.
-                app.downloadPromise = download.startAsync().then(onSuccess, onError, onProgress);
+                app.downloadPromise = download.startAsync({
+                    title: 'My download'    // optional android notification title
+                }).then(onSuccess, onError, onProgress);
             });
         });
 

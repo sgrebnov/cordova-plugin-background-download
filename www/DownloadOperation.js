@@ -41,7 +41,7 @@ var DownloadOperation = function (uri, resultFile) {
 /**
  * Starts an asynchronous download operation.
  */
-DownloadOperation.prototype.startAsync = function() {
+DownloadOperation.prototype.startAsync = function(options) {
 
     var deferral = new Promise.Deferral(),
         me = this,
@@ -60,7 +60,11 @@ DownloadOperation.prototype.startAsync = function() {
             deferral.reject(err);
         };
 
-    exec(successCallback, errorCallback, "BackgroundDownload", "startAsync", [this.uri, this.resultFile.toURL()]);
+    var title = "org.apache.cordova.backgroundDownload plugin";
+    if( typeof options === 'object' && options.title )
+        title = options.title;
+
+    exec(successCallback, errorCallback, "BackgroundDownload", "startAsync", [this.uri, this.resultFile.toURL(), title]);
 
     // custom mechanism to trigger stop when user cancels pending operation
     deferral.promise.onCancelled = function () {
