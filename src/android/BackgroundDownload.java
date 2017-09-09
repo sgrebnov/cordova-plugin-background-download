@@ -355,9 +355,15 @@ public class BackgroundDownload extends CordovaPlugin {
             DownloadManager.Query query = new DownloadManager.Query();
             query.setFilterById(downloadId);
             Cursor cursor = mgr.query(query);
+            if( cursor.getCount() == 0 )
+                return;
+
             int idxURI = cursor.getColumnIndex(DownloadManager.COLUMN_URI);
             cursor.moveToFirst();
             String uri = cursor.getString(idxURI);
+
+            if (!activDownloads.containsKey(uri))
+                return;
 
             Download curDownload = activDownloads.get(uri);
 
