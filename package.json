@@ -1,0 +1,37 @@
+{
+  "name": "cordova-plugin-background-download",
+  "version": "0.0.2",
+  "description": "Cordova Background Download Plugin",
+  "cordova": {
+    "id": "cordova-plugin-background-download",
+    "platforms": [
+      "android",
+      "ios",
+      "wp8",
+      "windows8",
+      "windows"
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sgrebnov/cordova-plugin-background-download.git"
+  },
+  "keywords": [
+    "cordova",
+    "background",
+    "file",
+    "download",
+    "ecosystem:cordova",
+    "cordova-android",
+    "cordova-ios",
+    "cordova-wp8",
+    "cordova-windows8",
+    "cordova-windows"
+  ],
+  "author": "Sergey Grebnov",
+  "license": "Apache 2.0",
+  "bugs": {
+    "url": "https://github.com/sgrebnov/cordova-plugin-background-download/issues"
+  },
+  "homepage": "https://github.com/sgrebnov/cordova-plugin-background-download#readme"
+}
