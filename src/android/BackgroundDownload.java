@@ -204,6 +204,13 @@ public class BackgroundDownload extends CordovaPlugin {
                 Cursor cursor = mgr.query(q);
                 try {
                     if (!cursor.moveToFirst()) {
+                        cordova.getActivity().runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                cleanUp(curDownload);
+                                curDownload.getCallbackContext().error("cancelled or terminated");
+                            }
+                        });
                         return;
                     }
 
