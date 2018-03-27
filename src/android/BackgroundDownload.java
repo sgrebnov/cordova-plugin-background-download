@@ -161,25 +161,31 @@ public class BackgroundDownload extends CordovaPlugin {
         curDownload.setDownloadId(findActiveDownload(curDownload.getUriString()));
 
         if (curDownload.getDownloadId() == DOWNLOAD_ID_UNDEFINED) {
-            // make sure file does not exist, in other case DownloadManager will fail
-            File targetFile = new File(Uri.parse(curDownload.getTempFilePath()).getPath());
-            targetFile.delete();
+            try {
+                // make sure file does not exist, in other case DownloadManager will fail
+                File targetFile = new File(Uri.parse(curDownload.getTempFilePath()).getPath());
+                targetFile.delete();
 
-            DownloadManager mgr = getDownloadManager();
-            DownloadManager.Request request = new DownloadManager.Request(source);
-            request.setTitle("org.apache.cordova.backgroundDownload plugin");
-            request.setVisibleInDownloadsUi(false);
+                DownloadManager mgr = getDownloadManager();
+                DownloadManager.Request request = new DownloadManager.Request(source);
+                request.setTitle("org.apache.cordova.backgroundDownload plugin");
+                request.setVisibleInDownloadsUi(false);
 
-            // hide notification. Not compatible with current android api.
-            // request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN);
+                // hide notification. Not compatible with current android api.
+                // request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN);
 
-            // we use default settings for roaming and network type
-            // request.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI | DownloadManager.Request.NETWORK_MOBILE);
-            // request.setAllowedOverRoaming(false);
+                // we use default settings for roaming and network type
+                // request.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI | DownloadManager.Request.NETWORK_MOBILE);
+                // request.setAllowedOverRoaming(false);
 
-            request.setDestinationUri(Uri.parse(curDownload.getTempFilePath()));
+                request.setDestinationUri(Uri.parse(curDownload.getTempFilePath()));
 
-            curDownload.setDownloadId(mgr.enqueue(request));
+                curDownload.setDownloadId(mgr.enqueue(request));
+            } catch (Exception ex) {
+                cleanUp(curDownload);
+                callbackContext.error(ex.getMessage());
+                return;
+            }
         } else if (checkDownloadCompleted(curDownload.getDownloadId())) {
             return;
         }
