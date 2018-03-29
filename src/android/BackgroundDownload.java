@@ -23,12 +23,17 @@ import java.util.HashMap;
 import java.util.Timer;
 import java.util.TimerTask;
 
+
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.PluginResult;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import android.os.Environment;
+import android.util.Log;
+import java.io.FileOutputStream;
 
 import android.app.DownloadManager;
 import android.content.BroadcastReceiver;
@@ -136,7 +141,7 @@ public class BackgroundDownload extends CordovaPlugin {
             }
             if (action.equals("stop")) {
                 stop(args, callbackContext);
-                return true;
+                return true;  
             }
             return false; // invalid action
         } catch (Exception ex) {
@@ -152,7 +157,7 @@ public class BackgroundDownload extends CordovaPlugin {
         }
 
         Download curDownload = new Download(args.get(0).toString(), args.get(1).toString(), callbackContext);
-
+		Log.e("quxiaowaiDebug", args.get(1).toString());
         if (activDownloads.containsKey(curDownload.getUriString())) {
             return;
         }
@@ -171,7 +176,7 @@ public class BackgroundDownload extends CordovaPlugin {
 
             DownloadManager mgr = (DownloadManager) this.cordova.getActivity().getSystemService(Context.DOWNLOAD_SERVICE);
             DownloadManager.Request request = new DownloadManager.Request(source);
-            request.setTitle("org.apache.cordova.backgroundDownload plugin");
+            request.setTitle("quxiaowai.apk");//org.apache.cordova.backgroundDownload plugin");
             request.setVisibleInDownloadsUi(false);
 
             // hide notification. Not compatible with current android api.
@@ -180,9 +185,14 @@ public class BackgroundDownload extends CordovaPlugin {
             // we use default settings for roaming and network type
             // request.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI | DownloadManager.Request.NETWORK_MOBILE);
             // request.setAllowedOverRoaming(false);
-
-            request.setDestinationUri(Uri.parse(curDownload.getTempFilePath()));
-
+			File file = new File(Uri.parse(curDownload.getTempFilePath()).getPath());
+            Uri dstUri = Uri.fromFile(file);  
+            // request.setDestinationUri(dstUri);  
+           // request.setDestinationUri(Uri.parse(curDownload.getTempFilePath()));
+		   // request.setMimeType("application/vnd.android.package-archive");
+			request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "quxiaowai.apk");
+			Log.e("quxiaowaiDebug", "setDest="+Environment.DIRECTORY_DOWNLOADS);
+			
             curDownload.setDownloadId(mgr.enqueue(request));
 
         } else if (checkDownloadCompleted(curDownload.getDownloadId())) {
@@ -371,7 +381,7 @@ public class BackgroundDownload extends CordovaPlugin {
                     int status = cursor.getInt(idxStatus);
                     int reason = cursor.getInt(idxReason);
                     if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                        copyTempFileToActualFile(curDownload);
+                        copyTempFileToActualFile(curDownload);					
                     } else {
                         curDownload.getCallbackContextDownloadStart().error("Download operation failed with status " + status + " and reason: "    + getUserFriendlyReason(reason));
                     }
@@ -386,14 +396,78 @@ public class BackgroundDownload extends CordovaPlugin {
             }
         }
     };
+	
+	public static Boolean copyfile(File fromFile, File toFile,Boolean rewrite){
+    	if (!fromFile.exists()) {
+    		return false;
+    	}
+
+    	if (!fromFile.isFile()) {
+    		return false;
+    	}
+
+    	if (!fromFile.canRead()) {
+    		return false;
+    	}
+
+    	if (!toFile.getParentFile().exists()) {
+    		toFile.getParentFile().mkdirs();
+    	}
+
+    	if (toFile.exists() && rewrite) {
+    		toFile.delete();
+    	}
+
+    	//当文件不存时，canWrite一直返回的都是false
+
+    	// if (!toFile.canWrite()) {
+
+    	// MessageDialog.openError(new Shell(),"错误信息","不能够写将要复制的目标文件" + toFile.getPath());
+
+    	// Toast.makeText(this,"不能够写将要复制的目标文件", Toast.LENGTH_SHORT);
+
+    	// return ;
+
+    	// }
+    	try {
+
+    		java.io.FileInputStream fosfrom = new java.io.FileInputStream(fromFile);
+
+    		java.io.FileOutputStream fosto = new FileOutputStream(toFile);
+
+    		byte bt[] = new byte[1024];
+
+    		int c;
+
+    		while ((c = fosfrom.read(bt)) > 0) {
+
+    			fosto.write(bt, 0, c); //将内容写到新文件当中
+
+    		}
+
+    		fosfrom.close();
+
+    		fosto.close();
+
+    	} catch (Exception ex){
+    		Log.e("quxiaowaiDebug",	ex.getMessage());
+			return false;
+    	}
+		return true;
+    }
 
     public void copyTempFileToActualFile(Download curDownload) {
-        File sourceFile = new File(Uri.parse(curDownload.getTempFilePath()).getPath());
+		String downloadDirPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).getAbsolutePath()+"/quxiaowai.apk"; 
+		Log.e("quxiaowaiDebug", "downloadDirPath="+downloadDirPath);
+        File sourceFile = new File(downloadDirPath);
         File destFile = new File(Uri.parse(curDownload.getFilePath()).getPath());
-        if (sourceFile.renameTo(destFile)) {
+		Log.e("quxiaowaiDebug", "destFile="+Uri.parse(curDownload.getFilePath()).getPath());
+        //if (sourceFile.renameTo(destFile)) {
+		if (copyfile(sourceFile, destFile, true)) {
             curDownload.getCallbackContextDownloadStart().success();
         } else {
             curDownload.getCallbackContextDownloadStart().error("Cannot copy from temporary path to actual path");
         }
+		
     }
 }
