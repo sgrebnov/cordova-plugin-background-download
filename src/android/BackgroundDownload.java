@@ -19,7 +19,9 @@
 package org.apache.cordova.backgroundDownload;
 
 import java.io.File;
+import java.net.HttpURLConnection;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -231,9 +233,7 @@ public class BackgroundDownload extends CordovaPlugin {
                                 @Override
                                 public void run() {
                                     cleanUp(curDownload);
-                                    curDownload.getCallbackContext().error(
-                                            String.format("Download operation failed with reason: %s (%d)",
-                                                    getUserFriendlyReason(reason), reason));
+                                    reportError(curDownload.getCallbackContext(), reason);
                                 }
                             });
                             return;
@@ -336,6 +336,20 @@ public class BackgroundDownload extends CordovaPlugin {
             case DownloadManager.ERROR_UNKNOWN:
                 failedReason = "ERROR_UNKNOWN";
                 break;
+            case HttpURLConnection.HTTP_BAD_REQUEST:
+                failedReason = "BAD_REQUEST";
+                break;
+            case HttpURLConnection.HTTP_UNAUTHORIZED:
+                failedReason = "UNAUTHORIZED";
+                break;
+            case HttpURLConnection.HTTP_FORBIDDEN:
+                failedReason = "FORBIDDEN";
+                break;
+            case HttpURLConnection.HTTP_NOT_FOUND:
+                failedReason = "NOT_FOUND";
+                break;
+            case HttpURLConnection.HTTP_INTERNAL_ERROR:
+                failedReason = "INTERNAL_SERVER_ERROR";
         }
 
         return failedReason;
@@ -418,6 +432,9 @@ public class BackgroundDownload extends CordovaPlugin {
                     if (status == DownloadManager.STATUS_SUCCESSFUL) {
                         copyTempFileToActualFile(curDownload);
                         return;
+                    } else if (status == DownloadManager.STATUS_FAILED) {
+                        int reason = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_REASON));
+                        reportError(curDownload.getCallbackContext(), reason);
                     }
                 }
                 curDownload.getCallbackContext().error("cancelled or terminated");
@@ -439,5 +456,13 @@ public class BackgroundDownload extends CordovaPlugin {
             curDownload.getCallbackContext().error("Cannot copy from temporary path to actual path.");
             Log.d(TAG, String.format("Source: '%s'(%s), dest: '%s'", curDownload.getTempFilePath(), sourceFile.exists(), curDownload.getFilePath()));
         }
+    }
+
+    private void reportError(CallbackContext callbackContext, int errorCode) {
+        String reasonMsg = getUserFriendlyReason(errorCode);
+        if ("".equals(reasonMsg))
+            reasonMsg = String.format(Locale.getDefault(), "Download operation failed with reason: %d", errorCode);
+
+        callbackContext.error(reasonMsg);
     }
 }
