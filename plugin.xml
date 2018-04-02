@@ -12,8 +12,6 @@ xmlns:android="http://schemas.android.com/apk/res/android"
     <repo>TODO</repo>
     <issue>TODO</issue>
 
-    <dependency id="cordova-plugin-file" />
-
     <js-module src="www/Promise.js" name="Promise">
     </js-module>
 
