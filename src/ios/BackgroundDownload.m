@@ -89,13 +89,18 @@
 }
 
 -(void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error {
-    if (ignoreNextError) {
-        ignoreNextError = NO;
+    NSInteger statusCode = [(NSHTTPURLResponse *)[task response] statusCode];
+    if (statusCode >= 400) {
+        CDVPluginResult* errorResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:[NSHTTPURLResponse localizedStringForStatusCode:statusCode]];
+        [self.commandDelegate sendPluginResult:errorResult callbackId:self.callbackId];
         return;
     }
-    
     if (error != nil) {
-        if ((error.code == -999)) {
+        if (ignoreNextError) {
+            ignoreNextError = NO;
+            return;
+        }
+        if (error.code == -999) {
             NSData* resumeData = [[error userInfo] objectForKey:NSURLSessionDownloadTaskResumeData];
             // resumeData is available only if operation was terminated by the system (no connection or other reason)
             // this happens when application is closed when there is pending download, so we try to resume it
