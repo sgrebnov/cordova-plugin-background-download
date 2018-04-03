@@ -19,27 +19,37 @@
 package org.apache.cordova.backgroundDownload;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.net.HttpURLConnection;
+import java.nio.channels.FileChannel;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Timer;
 import java.util.TimerTask;
 
 import org.apache.cordova.CallbackContext;
+import org.apache.cordova.CordovaInterface;
 import org.apache.cordova.CordovaPlugin;
+import org.apache.cordova.CordovaWebView;
+import org.apache.cordova.PermissionHelper;
 import org.apache.cordova.PluginResult;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import android.Manifest;
 import android.app.DownloadManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.util.Log;
+import android.util.SparseArray;
 
 /**
  * Based on DownloadManager which is intended to be used for long-running HTTP downloads. Support of Android 2.3. (API 9) and later
@@ -52,6 +62,17 @@ public class BackgroundDownload extends CordovaPlugin {
 
     private static final long DOWNLOAD_ID_UNDEFINED = -1;
     private static final long DOWNLOAD_PROGRESS_UPDATE_TIMEOUT = 1000;
+
+    private static class PermissionsRequest {
+
+        private final JSONArray rawArgs;
+        private final CallbackContext callbackContext;
+
+        private PermissionsRequest(JSONArray rawArgs, CallbackContext callbackContext) {
+            this.rawArgs = rawArgs;
+            this.callbackContext = callbackContext;
+        }
+    }
 
     private static class Download {
 
@@ -66,7 +87,8 @@ public class BackgroundDownload extends CordovaPlugin {
                 CallbackContext callbackContext) {
             this.setUriString(uriString);
             this.setFilePath(filePath);
-            this.setTempFilePath(filePath + "." + System.currentTimeMillis());
+            this.setTempFilePath(Uri.fromFile(new File(android.os.Environment.getExternalStorageDirectory().getPath(),
+                    Uri.parse(filePath).getLastPathSegment() + "." + System.currentTimeMillis())).toString());
             this.setCallbackContext(callbackContext);
         }
 
@@ -119,10 +141,19 @@ public class BackgroundDownload extends CordovaPlugin {
         };
     }
 
+    private SparseArray<PermissionsRequest> permissionRequests;
+
     private HashMap<String, Download> activeDownloads = new HashMap<>();
 
     private DownloadManager getDownloadManager() {
         return (DownloadManager) cordova.getActivity().getSystemService(Context.DOWNLOAD_SERVICE);
+    }
+
+    @Override
+    public void initialize(CordovaInterface cordova, CordovaWebView webView) {
+        super.initialize(cordova, webView);
+
+        permissionRequests = new SparseArray<>();
     }
 
     @Override
@@ -144,6 +175,10 @@ public class BackgroundDownload extends CordovaPlugin {
     }
 
     private void startAsync(JSONArray args, CallbackContext callbackContext) throws JSONException {
+        if (!checkPermissions(args, callbackContext)) {
+            return;
+        }
+
         if (activeDownloads.size() == 0) {
             // required to receive notification when download is completed
             cordova.getActivity().registerReceiver(receiver, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
@@ -450,11 +485,29 @@ public class BackgroundDownload extends CordovaPlugin {
     private void copyTempFileToActualFile(Download curDownload) {
         File sourceFile = new File(Uri.parse(curDownload.getTempFilePath()).getPath());
         File destFile = new File(Uri.parse(curDownload.getFilePath()).getPath());
-        if (sourceFile.renameTo(destFile)) {
+
+        try {
+            copyFile(sourceFile, destFile);
             curDownload.getCallbackContext().success();
-        } else {
-            curDownload.getCallbackContext().error("Cannot copy from temporary path to actual path.");
-            Log.d(TAG, String.format("Source: '%s'(%s), dest: '%s'", curDownload.getTempFilePath(), sourceFile.exists(), curDownload.getFilePath()));
+        } catch (IOException e) {
+            curDownload.getCallbackContext().error("Cannot copy from temporary path to actual path");
+            Log.e(TAG, String.format("Error occurred while copying the file. Source: '%s'(%s), dest: '%s'",
+                    curDownload.getTempFilePath(), sourceFile.exists(), curDownload.getFilePath()), e);
+        }
+    }
+
+    private void copyFile(File src, File dest) throws IOException {
+        FileChannel inChannel = new FileInputStream(src).getChannel();
+        FileChannel outChannel = new FileOutputStream(dest).getChannel();
+        try {
+            inChannel.transferTo(0, inChannel.size(), outChannel);
+        } finally {
+            if (inChannel != null) {
+                inChannel.close();
+            }
+            if (outChannel != null) {
+                outChannel.close();
+            }
         }
     }
 
@@ -464,5 +517,34 @@ public class BackgroundDownload extends CordovaPlugin {
             reasonMsg = String.format(Locale.getDefault(), "Download operation failed with reason: %d", errorCode);
 
         callbackContext.error(reasonMsg);
+    }
+
+    private boolean checkPermissions(JSONArray args, CallbackContext callbackContext) {
+        if (!PermissionHelper.hasPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
+            permissionRequests.put(permissionRequests.size(), new PermissionsRequest(args, callbackContext));
+            PermissionHelper.requestPermission(this, permissionRequests.size() - 1, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+            return false;
+        }
+
+        return true;
+    }
+
+    public void onRequestPermissionResult(int requestCode, String[] permissions, int[] grantResults) {
+        final PermissionsRequest permissionsRequest = permissionRequests.get(requestCode);
+        permissionRequests.remove(requestCode);
+        if (permissionsRequest == null) {
+            return;
+        }
+
+        if (grantResults.length < 1 || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
+            permissionsRequest.callbackContext.error("PERMISSION_DENIED");
+            return;
+        }
+
+        try {
+            startAsync(permissionsRequest.rawArgs, permissionsRequest.callbackContext);
+        } catch (JSONException ex) {
+            permissionsRequest.callbackContext.error(ex.getMessage());
+        }
     }
 }
