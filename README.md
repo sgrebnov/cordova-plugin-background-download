@@ -39,10 +39,10 @@ API provides an advanced file download functionality that persists beyond app te
         }, function(error) {...})
     ```
     
-  - or resolve `sdcard` filesystem in runtime
+  - or resolve `sdcard` directory in runtime
     ```
-    window.resolveLocalFileSystemURL('cdvfile://localhost/sdcard/', function(fileSystem) {
-            fileSystem.root.getFile(fileName, { create: true }, function (targetFile) {
+    window.resolveLocalFileSystemURL('cdvfile://localhost/sdcard/', function(dirEntry) {
+            dirEntry.getFile(fileName, { create: true }, function (targetFile) {
                 ...
             })
         }, function(error) {...})
@@ -60,10 +60,10 @@ API provides an advanced file download functionality that persists beyond app te
             })
         }, function(error) {...})
     ```
-  - or resolve `files` filesystem in runtime
+  - or resolve `files` directory in runtime
     ```
-    window.resolveLocalFileSystemURL('cdvfile://localhost/files/', function(fileSystem) {
-            fileSystem.root.getFile(fileName, { create: true }, function (targetFile) {
+    window.resolveLocalFileSystemURL('cdvfile://localhost/files/', function(dirEntry) {
+            dirEntry.getFile(fileName, { create: true }, function (targetFile) {
                 ...
             })
         }, function(error) {...})
