@@ -279,8 +279,8 @@ public class BackgroundDownload extends CordovaPlugin {
                             handleSuccessDownload(curDownload);
                             return;
                         case DownloadManager.STATUS_RUNNING:
-                            long bytesDownloaded = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
-                            long bytesTotal = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
+                            long bytesDownloaded = cursor.getLong(cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
+                            long bytesTotal = cursor.getLong(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
                             JSONObject jsonProgress = new JSONObject();
                             jsonProgress.put("bytesReceived", bytesDownloaded);
                             jsonProgress.put("totalBytesToReceive", bytesTotal);
