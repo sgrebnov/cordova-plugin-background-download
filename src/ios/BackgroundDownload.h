@@ -24,14 +24,20 @@
 // the download wilcontinue until it completes.
 @interface BackgroundDownload : CDVPlugin <NSURLSessionDownloadDelegate>
 
-@property NSString *targetFile;
-@property NSString *downloadUri;
-@property NSString *callbackId;
-
 @property (nonatomic) NSURLSession *session;
-@property (nonatomic) NSURLSessionDownloadTask *downloadTask;
 
 - (void)startAsync:(CDVInvokedUrlCommand*)command;
 - (void)stop:(CDVInvokedUrlCommand*)command;
+
+@end
+
+@interface Download : NSObject
+
+@property NSString *filePath;
+@property NSString *uriString;
+@property NSString *callbackId;
+@property (nonatomic) NSURLSessionDownloadTask *task;
+
+- (id) initWithPath:(NSString *)filePath uri:(NSString *)uri callbackId:(NSString *)callbackId task:(NSURLSessionDownloadTask *)task;
 
 @end
