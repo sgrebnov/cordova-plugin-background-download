@@ -21,33 +21,70 @@
 
 @implementation BackgroundDownload {
     bool ignoreNextError;
+    NSMutableDictionary *activeDownloads;
 }
 
 @synthesize session;
-@synthesize downloadTask;
+
+- (Download *) downloadItemWithUri:(NSString *) uri {
+    return activeDownloads ? [activeDownloads valueForKey:uri] : nil;
+}
+
+
+- (Download *) downloadItemWithTask:(NSURLSessionTask *) task {
+    if (!activeDownloads) {
+        return nil;
+    }
+    @synchronized (self) {
+        for(NSInteger i = 0; i < activeDownloads.count; i++){
+            Download* downloadItem = activeDownloads.allValues[i];
+            if (downloadItem.task == task) {
+                return downloadItem;
+            }
+        }
+    }
+    return nil;
+}
 
 - (void)startAsync:(CDVInvokedUrlCommand*)command
 {
-    self.downloadUri = [command.arguments objectAtIndex:0];
-    self.targetFile = [command.arguments objectAtIndex:1];
-    
-    self.callbackId = command.callbackId;
-    
-    NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:self.downloadUri]];
-    
-    ignoreNextError = NO;
-    
+    if (!activeDownloads) {
+        activeDownloads = [[NSMutableDictionary alloc] init];
+    }
+
     session = [self backgroundSession];
-    
+
     [session getTasksWithCompletionHandler:^(NSArray *dataTasks, NSArray *uploadTasks, NSArray *downloadTasks) {
-        if (downloadTasks.count > 0) {
-            downloadTask = downloadTasks[0];
-        } else {
-            downloadTask = [session downloadTaskWithRequest:request];
+        NSString *uri = [command.arguments objectAtIndex:0];
+        Download *downloadItem = [activeDownloads valueForKey:uri];
+
+        if (!downloadItem) {
+            NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:uri]];
+            downloadItem = [[Download alloc] initWithPath:[command.arguments objectAtIndex:1] uri:uri
+                                               callbackId:command.callbackId
+                                                     task:nil];
+            [self attachToExistingDownload:downloadTasks downloadItem:downloadItem];
+            if (downloadItem.task == nil) {
+                downloadItem.task = [session downloadTaskWithRequest:request];
+            }
+
+            @synchronized (activeDownloads) {
+                [activeDownloads setObject:downloadItem forKey:downloadItem.uriString];
+            }
         }
-        [downloadTask resume];
+
+        [downloadItem.task resume];
+
+        ignoreNextError = NO;
+
+        if (downloadTasks.count > 0) {
+            for(NSInteger i = 0; i < downloadTasks.count; i++) {
+                if (![downloadTasks[i] isEqual:downloadItem.task]) {
+                    [downloadTasks[i] resume];
+                }
+            }
+        }
     }];
-    
 }
 
 - (NSURLSession *)backgroundSession
@@ -65,19 +102,52 @@
 {
     CDVPluginResult* pluginResult = nil;
     NSString* myarg = [command.arguments objectAtIndex:0];
-    
+
     if (myarg != nil) {
         pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
     } else {
         pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Arg was null"];
     }
-    
-    [downloadTask cancel];
-    
+
+    [self cleanUpWithUri:[command.arguments objectAtIndex:0]];
+
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
-- (void)URLSession:(NSURLSession *)session downloadTask:(NSURLSessionDownloadTask *)downloadTask didWriteData:(int64_t)bytesWritten totalBytesWritten:(int64_t)totalBytesWritten totalBytesExpectedToWrite:(int64_t)totalBytesExpectedToWrite {
+- (void) attachToExistingDownload:(NSArray *)downloadTasks downloadItem:(Download *) downloadItem
+{
+    for(NSInteger i = 0; i < downloadTasks.count; i++) {
+        if ([((NSURLSessionDownloadTask *)downloadTasks[i]).originalRequest.URL.absoluteString isEqual:downloadItem.uriString]) {
+            downloadItem.task = downloadTasks[i];
+            return;
+        }
+    }
+}
+
+- (void) cleanUp:(Download *) downloadItem
+{
+    if (!downloadItem) {
+        return;
+    }
+
+    [downloadItem.task cancel];
+    @synchronized (activeDownloads) {
+        [activeDownloads removeObjectForKey:downloadItem.uriString];
+    }
+}
+
+-(void) cleanUpWithUri:(NSString*) uri
+{
+    Download *curDownload = [self downloadItemWithUri: uri];
+    [self cleanUp:curDownload];
+}
+
+- (void)URLSession:(NSURLSession *)session downloadTask:(NSURLSessionDownloadTask *)downloadTask didWriteData:(int64_t)bytesWritten totalBytesWritten:(int64_t)totalBytesWritten totalBytesExpectedToWrite:(int64_t)totalBytesExpectedToWrite
+{
+    Download * curDownload = [self downloadItemWithTask:downloadTask];
+    if (!curDownload)
+        return;
+
     NSMutableDictionary* progressObj = [NSMutableDictionary dictionaryWithCapacity:1];
     [progressObj setObject:[NSNumber numberWithInteger:totalBytesWritten] forKey:@"bytesReceived"];
     [progressObj setObject:[NSNumber numberWithInteger:totalBytesExpectedToWrite] forKey:@"totalBytesToReceive"];
@@ -85,14 +155,21 @@
     [resObj setObject:progressObj forKey:@"progress"];
     CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:resObj];
     result.keepCallback = [NSNumber numberWithInteger: TRUE];
-    [self.commandDelegate sendPluginResult:result callbackId:self.callbackId];
+    [self.commandDelegate sendPluginResult:result callbackId:curDownload.callbackId];
 }
 
--(void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error {
+-(void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error
+{
+    Download * curDownload = [self downloadItemWithTask:task];
+    if (!curDownload)
+        return;
     NSInteger statusCode = [(NSHTTPURLResponse *)[task response] statusCode];
     if (statusCode >= 400) {
         CDVPluginResult* errorResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:[NSHTTPURLResponse localizedStringForStatusCode:statusCode]];
-        [self.commandDelegate sendPluginResult:errorResult callbackId:self.callbackId];
+        [self.commandDelegate sendPluginResult:errorResult callbackId:curDownload.callbackId];
+        @synchronized (self) {
+            [activeDownloads removeObjectForKey:curDownload.uriString];
+        }
         return;
     }
     if (error != nil) {
@@ -106,26 +183,49 @@
             // this happens when application is closed when there is pending download, so we try to resume it
             if (resumeData != nil) {
                 ignoreNextError = YES;
-                [downloadTask cancel];
-                downloadTask = [self.session downloadTaskWithResumeData:resumeData];
-                [downloadTask resume];
+                [curDownload.task cancel];
+                curDownload.task = [self.session downloadTaskWithResumeData:resumeData];
+                [curDownload.task resume];
                 return;
             }
         }
         CDVPluginResult* errorResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:[error localizedDescription]];
-        [self.commandDelegate sendPluginResult:errorResult callbackId:self.callbackId];
+        [self.commandDelegate sendPluginResult:errorResult callbackId:curDownload.callbackId];
     } else {
         CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
-        [self.commandDelegate sendPluginResult:pluginResult callbackId:self.callbackId];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:curDownload.callbackId];
+    }
+
+    @synchronized (self) {
+        [activeDownloads removeObjectForKey:curDownload.uriString];
     }
 }
 
 - (void)URLSession:(NSURLSession *)session downloadTask:(NSURLSessionDownloadTask *)downloadTask didFinishDownloadingToURL:(NSURL *)location {
+    Download * curDownload = [self downloadItemWithTask:downloadTask];
+    if (!curDownload)
+        return;
+
     NSFileManager *fileManager = [NSFileManager defaultManager];
-    
-    NSURL *targetURL = [NSURL URLWithString:_targetFile];
-    
+
+    NSURL *targetURL = [NSURL URLWithString:curDownload.filePath];
+
     [fileManager removeItemAtPath:targetURL.path error: nil];
     [fileManager createFileAtPath:targetURL.path contents:[fileManager contentsAtPath:[location path]] attributes:nil];
 }
+@end
+
+@implementation Download
+
+- (id) initWithPath:(NSString *)filePath uri:(NSString *)uri callbackId:(NSString *)callbackId task:(NSURLSessionDownloadTask *)task {
+    if ( self = [super init] ) {
+        self.filePath = filePath;
+        self.uriString = uri;
+        self.callbackId = callbackId;
+        self.task = task;
+        return self;
+    }
+    return nil;
+}
+
 @end
