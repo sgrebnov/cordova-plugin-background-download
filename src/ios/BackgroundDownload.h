@@ -33,6 +33,7 @@
 
 @interface Download : NSObject
 
+@property NSString *error;
 @property NSString *filePath;
 @property NSString *uriString;
 @property NSString *callbackId;
