@@ -191,6 +191,9 @@
         }
         CDVPluginResult* errorResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:[error localizedDescription]];
         [self.commandDelegate sendPluginResult:errorResult callbackId:curDownload.callbackId];
+    } if (curDownload.error != nil) {
+        CDVPluginResult* errorResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:curDownload.error];
+        [self.commandDelegate sendPluginResult:errorResult callbackId:curDownload.callbackId];
     } else {
         CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
         [self.commandDelegate sendPluginResult:pluginResult callbackId:curDownload.callbackId];
@@ -211,7 +214,24 @@
     NSURL *targetURL = [NSURL URLWithString:curDownload.filePath];
 
     [fileManager removeItemAtPath:targetURL.path error: nil];
-    [fileManager createFileAtPath:targetURL.path contents:[fileManager contentsAtPath:[location path]] attributes:nil];
+
+    NSError * error;
+    bool result = [fileManager moveItemAtURL:location toURL:targetURL error:&error];
+    if (result) {
+        return;
+    }
+
+    result = [fileManager copyItemAtURL:location toURL:targetURL error:&error];
+    if (result) {
+        return;
+    }
+
+    NSString *errorCode = @"";
+    if (error != nil) {
+        errorCode = [[NSString alloc] initWithFormat:@" - (%d)", error.code];
+    }
+
+    curDownload.error = [@"Cannot copy from temporary path to actual path " stringByAppendingString:errorCode];
 }
 @end
 
@@ -219,6 +239,7 @@
 
 - (id) initWithPath:(NSString *)filePath uri:(NSString *)uri callbackId:(NSString *)callbackId task:(NSURLSessionDownloadTask *)task {
     if ( self = [super init] ) {
+        self.error = nil;
         self.filePath = filePath;
         self.uriString = uri;
         self.callbackId = callbackId;

@@ -3,7 +3,7 @@
 <plugin xmlns="http://apache.org/cordova/ns/plugins/1.0"
 xmlns:android="http://schemas.android.com/apk/res/android"
            id="cordova-plugin-background-download"
-      version="0.0.2">
+      version="0.0.3">
     <name>Background Download</name>
 
     <description>Cordova Background Download Plugin</description>
