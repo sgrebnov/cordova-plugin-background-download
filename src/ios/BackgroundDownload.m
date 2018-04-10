@@ -226,7 +226,12 @@
         return;
     }
 
-    curDownload.error = @"Cannot copy from temporary path to actual path";
+    NSString *errorCode = @"";
+    if (error != nil) {
+        errorCode = [[NSString alloc] initWithFormat:@" - (%d)", error.code];
+    }
+
+    curDownload.error = [@"Cannot copy from temporary path to actual path " stringByAppendingString:errorCode];
 }
 @end
 
