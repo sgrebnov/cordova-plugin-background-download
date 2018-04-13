@@ -27,47 +27,28 @@ API provides an advanced file download functionality that persists beyond app te
 
 - ***External Storage***
   
-  - add the following section to config.xml
-  
-    `<preference name="AndroidPersistentFileLocation" value="Compatibility" />`
-        
+     resolve `cordova.file.externalDataDirectory` directory in runtime
+     
     ```
-    window.requestFileSystem(LocalFileSystem.PERSISTENT, 0, function(fileSystem) {
-            fileSystem.root.getFile(fileName, { create: true }, function (targetFile) {
-                ...
-            })
-        }, function(error) {...})
-    ```
-    
-  - or resolve `sdcard` directory in runtime
-    ```
-    window.resolveLocalFileSystemURL('cdvfile://localhost/sdcard/', function(dirEntry) {
+    window.resolveLocalFileSystemURL(cordova.file.externalDataDirectory, function(dirEntry) {
             dirEntry.getFile(fileName, { create: true }, function (targetFile) {
                 ...
             })
         }, function(error) {...})
     ```
+     Note, that device can be without external storage. In this case `cordova.file.externalDataDirectory` will be `null` so it should be checked before usage.
 
 - ***Internal Storage***
-  - remove `AndroidPersistentFileLocation` preference from config.xml or set in to `Internal`
-  
-    `<preference name="AndroidPersistentFileLocation" value="Internal" />`
-    
+
+    resolve `cordova.file.dataDirectory` directory in runtime
+     
     ```
-    window.requestFileSystem(LocalFileSystem.PERSISTENT, 0, function(fileSystem) {
-            fileSystem.root.getFile(fileName, { create: true }, function (targetFile) {
-                ...
-            })
-        }, function(error) {...})
-    ```
-  - or resolve `files` directory in runtime
-    ```
-    window.resolveLocalFileSystemURL('cdvfile://localhost/files/', function(dirEntry) {
+    window.resolveLocalFileSystemURL(cordova.file.dataDirectory, function(dirEntry) {
             dirEntry.getFile(fileName, { create: true }, function (targetFile) {
                 ...
             })
         }, function(error) {...})
-    ```
+     ```
 
 Read File Plugin quirks for more details:
 - https://cordova.apache.org/docs/en/latest/reference/cordova-plugin-file/#android-quirks.
