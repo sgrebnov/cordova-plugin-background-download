@@ -57,10 +57,17 @@
     [session getTasksWithCompletionHandler:^(NSArray *dataTasks, NSArray *uploadTasks, NSArray *downloadTasks) {
         NSString *uri = [command.arguments objectAtIndex:0];
         Download *downloadItem = [activeDownloads valueForKey:uri];
+        NSString *uriMatcher = nil;
+        if (command.arguments.count > 2 &&
+            ![[command.arguments objectAtIndex:2] isEqual:[NSNull null]]) {
+            uriMatcher = [command.arguments objectAtIndex:2];
+        }
 
         if (!downloadItem) {
             NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:uri]];
-            downloadItem = [[Download alloc] initWithPath:[command.arguments objectAtIndex:1] uri:uri
+            downloadItem = [[Download alloc] initWithPath:[command.arguments objectAtIndex:1]
+                                                      uri:uri
+                                               uriMatcher:uriMatcher
                                                callbackId:command.callbackId
                                                      task:nil];
             [self attachToExistingDownload:downloadTasks downloadItem:downloadItem];
@@ -116,8 +123,37 @@
 
 - (void) attachToExistingDownload:(NSArray *)downloadTasks downloadItem:(Download *) downloadItem
 {
+    NSRegularExpression *regex = nil;
+    if (downloadItem.uriMatcher != nil && ![downloadItem.uriMatcher isEqual:@""]) {
+        regex = [NSRegularExpression regularExpressionWithPattern:downloadItem.uriMatcher
+                                                          options:NSRegularExpressionCaseInsensitive
+                                                            error:nil];
+    }
     for(NSInteger i = 0; i < downloadTasks.count; i++) {
-        if ([((NSURLSessionDownloadTask *)downloadTasks[i]).originalRequest.URL.absoluteString isEqual:downloadItem.uriString]) {
+        NSString * existingUrl = ((NSURLSessionDownloadTask *)downloadTasks[i]).originalRequest.URL.absoluteString;
+        bool urlMatches = false;
+        if (regex != nil) {
+            NSString *substringForExistingUrlMatch = nil;
+            NSString *substringForNewUrlMatch = nil;
+            NSRange rangeOfExistingUrlMatch = [regex rangeOfFirstMatchInString:existingUrl
+                                                                       options:0
+                                                                         range:NSMakeRange(0, [existingUrl length])];
+            if (!NSEqualRanges(rangeOfExistingUrlMatch, NSMakeRange(NSNotFound, 0))) {
+                substringForExistingUrlMatch = [existingUrl substringWithRange:rangeOfExistingUrlMatch];
+            }
+            NSRange rangeOfNewUrlMatch = [regex rangeOfFirstMatchInString:downloadItem.uriString
+                                                                       options:0
+                                                                         range:NSMakeRange(0, [downloadItem.uriString length])];
+            if (!NSEqualRanges(rangeOfNewUrlMatch, NSMakeRange(NSNotFound, 0))) {
+                substringForNewUrlMatch = [downloadItem.uriString substringWithRange:rangeOfNewUrlMatch];
+            }
+            
+            urlMatches = substringForExistingUrlMatch != nil &&
+                                substringForNewUrlMatch != nil &&
+                                [substringForExistingUrlMatch isEqual:substringForNewUrlMatch];
+        }
+
+        if (urlMatches || [existingUrl isEqual:downloadItem.uriString]) {
             downloadItem.task = downloadTasks[i];
             return;
         }
@@ -237,11 +273,12 @@
 
 @implementation Download
 
-- (id) initWithPath:(NSString *)filePath uri:(NSString *)uri callbackId:(NSString *)callbackId task:(NSURLSessionDownloadTask *)task {
+- (id) initWithPath:(NSString *)filePath uri:(NSString *)uri uriMatcher:(NSString *)uriMatcher callbackId:(NSString *)callbackId task:(NSURLSessionDownloadTask *)task {
     if ( self = [super init] ) {
         self.error = nil;
         self.filePath = filePath;
         self.uriString = uri;
+        self.uriMatcher = uriMatcher;
         self.callbackId = callbackId;
         self.task = task;
         return self;
