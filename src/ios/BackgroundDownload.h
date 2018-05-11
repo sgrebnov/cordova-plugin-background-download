@@ -36,9 +36,10 @@
 @property NSString *error;
 @property NSString *filePath;
 @property NSString *uriString;
+@property NSString *uriMatcher;
 @property NSString *callbackId;
 @property (nonatomic) NSURLSessionDownloadTask *task;
 
-- (id) initWithPath:(NSString *)filePath uri:(NSString *)uri callbackId:(NSString *)callbackId task:(NSURLSessionDownloadTask *)task;
+- (id) initWithPath:(NSString *)filePath uri:(NSString *)uri uriMatcher:(NSString *)uriMatcher callbackId:(NSString *)callbackId task:(NSURLSessionDownloadTask *)task;
 
 @end

@@ -27,8 +27,9 @@ var exec = require('cordova/exec'),
  *
  * @param {string} uri The location of the resource.
  * @param {File} resultFile The file that the response will be written to.
+ * @param {string} uriMatcher The regexp to compare location of the resources with already downloading ones.
  */
-var DownloadOperation = function (uri, resultFile) {
+var DownloadOperation = function (uri, resultFile, uriMatcher) {
 
     if (uri == null || resultFile == null) {
         throw new Error("missing or invalid argument");
@@ -36,6 +37,7 @@ var DownloadOperation = function (uri, resultFile) {
     
     this.uri = uri;
     this.resultFile = resultFile;
+    this.uriMatcher = uriMatcher;
 };
 
 /**
@@ -60,7 +62,7 @@ DownloadOperation.prototype.startAsync = function() {
             deferral.reject(err);
         };
 
-    exec(successCallback, errorCallback, "BackgroundDownload", "startAsync", [this.uri, this.resultFile.toURL()]);
+    exec(successCallback, errorCallback, "BackgroundDownload", "startAsync", [this.uri, this.resultFile.toURL(), this.uriMatcher]);
 
     // custom mechanism to trigger stop when user cancels pending operation
     deferral.promise.onCancelled = function () {
