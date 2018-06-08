@@ -82,6 +82,7 @@ public class BackgroundDownload extends CordovaPlugin {
 
         private Uri targetFileUri;
         private Uri tempFileUri;
+        private String notificationTitle;
         private String uriMatcher;
         private String uriString;
         private CallbackContext callbackContext; // The callback context from which we were invoked.
@@ -89,14 +90,30 @@ public class BackgroundDownload extends CordovaPlugin {
         private Timer timerProgressUpdate = null;
         private boolean isCanceled;
 
-        public Download(String uriString, String targetFileUri, String uriMatcher,
-                CallbackContext callbackContext) {
-            this.setUriString(uriString);
+        public static Download create(JSONArray args, CallbackContext callbackContext) throws JSONException  {
+            String uriMatcher = null;
+            if (args.length() > 2 && !"null".equals(args.getString(2))) {
+                uriMatcher = args.getString(2);
+            }
+
+            String notificationTitle = "org.apache.cordova.backgroundDownload plugin";
+            if (args.length() > 3 && !"null".equals(args.getString(3))) {
+                notificationTitle = args.getString(3);
+            }
+
+            return new Download(args.get(0).toString(), args.get(1).toString(), notificationTitle, uriMatcher,
+                    callbackContext);
+        }
+
+        public Download(String uriString, String targetFileUri, String notificationTitle,
+                String uriMatcher, CallbackContext callbackContext) {
+            this.uriString = uriString;
             this.setTargetFileUri(targetFileUri);
-            this.setUriMatcher(uriMatcher);
+            this.notificationTitle = notificationTitle;
+            this.uriMatcher = uriMatcher;
             this.setTempFileUri(Uri.fromFile(new File(android.os.Environment.getExternalStorageDirectory().getPath(),
                     Uri.parse(targetFileUri).getLastPathSegment() + "." + System.currentTimeMillis())).toString());
-            this.setCallbackContext(callbackContext);
+            this.callbackContext = callbackContext;
         }
 
         public Uri getTargetFileUri() {
@@ -111,16 +128,12 @@ public class BackgroundDownload extends CordovaPlugin {
             return uriString;
         }
 
-        public void setUriString(String uriString) {
-            this.uriString = uriString;
+        public String getNotificationTitle() {
+            return this.notificationTitle;
         }
 
         public String getUriMatcher() {
             return uriMatcher;
-        }
-
-        public void setUriMatcher(String uriMatcher) {
-            this.uriMatcher = uriMatcher;
         }
 
         public Uri getTempFileUri() {
@@ -133,10 +146,6 @@ public class BackgroundDownload extends CordovaPlugin {
 
         public CallbackContext getCallbackContext() {
             return callbackContext;
-        }
-
-        public void setCallbackContext(CallbackContext callbackContext) {
-            this.callbackContext = callbackContext;
         }
 
         public long getDownloadId() {
@@ -214,9 +223,7 @@ public class BackgroundDownload extends CordovaPlugin {
             return;
         }
 
-        Download curDownload = new Download(args.get(0).toString(), args.get(1).toString(), 
-                args.length() > 2 && !"null".equals(args.getString(2)) ? args.getString(2) : null, 
-                callbackContext);
+        Download curDownload = Download.create(args, callbackContext);
 
         if (activeDownloads.containsKey(curDownload.getUriString())) {
             return;
@@ -234,7 +241,7 @@ public class BackgroundDownload extends CordovaPlugin {
 
                 DownloadManager mgr = getDownloadManager();
                 DownloadManager.Request request = new DownloadManager.Request(source);
-                request.setTitle("org.apache.cordova.backgroundDownload plugin");
+                request.setTitle(curDownload.getNotificationTitle());
                 request.setVisibleInDownloadsUi(false);
 
                 // hide notification. Not compatible with current android api.
