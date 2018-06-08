@@ -1,6 +1,6 @@
 {
   "name": "cordova-plugin-background-download",
-  "version": "0.0.3",
+  "version": "0.5.0",
   "description": "Cordova Background Download Plugin",
   "cordova": {
     "id": "cordova-plugin-background-download",
