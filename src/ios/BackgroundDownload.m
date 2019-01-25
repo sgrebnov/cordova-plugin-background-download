@@ -20,7 +20,6 @@
 #import "BackgroundDownload.h"
 
 @implementation BackgroundDownload {
-    bool ignoreNextError;
     NSMutableDictionary *activeDownloads;
 }
 
@@ -81,8 +80,6 @@
         }
 
         [downloadItem.task resume];
-
-        ignoreNextError = NO;
 
         if (downloadTasks.count > 0) {
             for(NSInteger i = 0; i < downloadTasks.count; i++) {
@@ -209,16 +206,11 @@
         return;
     }
     if (error != nil) {
-        if (ignoreNextError) {
-            ignoreNextError = NO;
-            return;
-        }
         if (error.code == -999) {
             NSData* resumeData = [[error userInfo] objectForKey:NSURLSessionDownloadTaskResumeData];
             // resumeData is available only if operation was terminated by the system (no connection or other reason)
             // this happens when application is closed when there is pending download, so we try to resume it
             if (resumeData != nil) {
-                ignoreNextError = YES;
                 [curDownload.task cancel];
                 curDownload.task = [self.session downloadTaskWithResumeData:resumeData];
                 [curDownload.task resume];
