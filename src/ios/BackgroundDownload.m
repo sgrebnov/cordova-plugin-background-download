@@ -131,6 +131,9 @@
     }
     for(NSInteger i = 0; i < downloadTasks.count; i++) {
         NSString * existingUrl = ((NSURLSessionDownloadTask *)downloadTasks[i]).originalRequest.URL.absoluteString;
+		if (!existingUrl) {
+			existingUrl = ((NSURLSessionDownloadTask *)downloadTasks[i]).currentRequest.URL.absoluteString;
+		}
         bool urlMatches = false;
         if (regex != nil) {
             NSString *substringForExistingUrlMatch = nil;
