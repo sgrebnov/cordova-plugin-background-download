@@ -20,26 +20,28 @@
 */
 
 var exec = require('cordova/exec'),
-    Promise = require('./Promise');
+  Promise = require('./Promise');
 
 /**
  * Performs an asynchronous download operation in the background.
  *
- * @param {string} uri The location of the resource.
- * @param {File} resultFile The file that the response will be written to.
- * @param {string} uriMatcher The regexp to compare location of the resources with already downloading ones.
- * @param {string} notificationTitle The title for downloading in notification.
+ * @param {JSON} downloadConfiguration The configuration for background download task
+ * Example:
+ * {
+ *   targetFile: <Path to local file system to store the downloaded file>,
+ *   downloadURL: <url to download from>,
+ *   requestHeaders: <request headers to be added on the request to download file>
+ *   sessionId: <id to assign to the url session to create request>
+ *   downloadDelay: <download delay in seconds>
+ * }
  */
-var DownloadOperation = function (uri, resultFile, uriMatcher, notificationTitle) {
+var DownloadOperation = function (downloadConfiguration) {
 
-    if (uri == null || resultFile == null) {
-        throw new Error("missing or invalid argument");
+    if (downloadConfiguration === null || downloadConfiguration['targetFile'] === null || downloadConfiguration['downloadURL'] === null) {
+        throw new Error("missing or invalid configuration. The configuration should atleast have targetFile and downloadURL.");
     }
-    
-    this.uri = uri;
-    this.resultFile = resultFile;
-    this.uriMatcher = uriMatcher;
-    this.notificationTitle = notificationTitle;
+
+    this.downloadConfiguration = downloadConfiguration;
 };
 
 /**
@@ -48,23 +50,23 @@ var DownloadOperation = function (uri, resultFile, uriMatcher, notificationTitle
 DownloadOperation.prototype.startAsync = function() {
 
     var deferral = new Promise.Deferral(),
-        me = this,
-        successCallback = function(result) {
+      me = this,
+      successCallback = function(result) {
 
-            // success callback is used to both report operation progress and 
-            // as operation completeness handler
-            
-            if (result && typeof result.progress != 'undefined') {
-                deferral.notify(result.progress);
-            } else {
-                deferral.resolve(result);
-            }
-        },
-        errorCallback = function(err) {
-            deferral.reject(err);
-        };
+          // success callback is used to both report operation progress and
+          // as operation completeness handler
 
-    exec(successCallback, errorCallback, "BackgroundDownload", "startAsync", [this.uri, this.resultFile.toURL(), this.uriMatcher, this.notificationTitle]);
+          if (result && typeof result.progress != 'undefined') {
+              deferral.notify(result.progress);
+          } else {
+              deferral.resolve(result);
+          }
+      },
+      errorCallback = function(err) {
+          deferral.reject(err);
+      };
+
+    exec(successCallback, errorCallback, "BackgroundDownload", "startAsync", [this.downloadConfiguration]);
 
     // custom mechanism to trigger stop when user cancels pending operation
     deferral.promise.onCancelled = function () {
@@ -79,7 +81,7 @@ DownloadOperation.prototype.startAsync = function() {
  */
 DownloadOperation.prototype.stop = function() {
     // TODO return promise
-    exec(null, null, "BackgroundDownload", "stop", [this.uri]);
+    exec(null, null, "BackgroundDownload", "stop", [this.downloadConfiguration]);
 
 };
 

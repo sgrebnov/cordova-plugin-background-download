@@ -23,7 +23,6 @@
 // TODO This means that you can start a download of a large image or file, close the app and
 // the download wilcontinue until it completes.
 @interface BackgroundDownload : CDVPlugin <NSURLSessionDownloadDelegate>
-
 @property (nonatomic) NSURLSession *session;
 
 - (void)startAsync:(CDVInvokedUrlCommand*)command;
@@ -34,12 +33,10 @@
 @interface Download : NSObject
 
 @property NSString *error;
-@property NSString *filePath;
-@property NSString *uriString;
-@property NSString *uriMatcher;
 @property NSString *callbackId;
+@property NSDictionary *configuration;
 @property (nonatomic) NSURLSessionDownloadTask *task;
 
-- (id) initWithPath:(NSString *)filePath uri:(NSString *)uri uriMatcher:(NSString *)uriMatcher callbackId:(NSString *)callbackId task:(NSURLSessionDownloadTask *)task;
+- (id) initWithConfiguration:(NSDictionary *)downloadConfiguration callbackId:(NSString *)callbackId task:(NSURLSessionDownloadTask *)task;
 
 @end

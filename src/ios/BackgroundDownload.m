@@ -19,6 +19,13 @@
 
 #import "BackgroundDownload.h"
 
+static NSString* const CONFIGURATION_REQUEST_HEADERS = @"requestHeaders";
+static NSString* const CONFIGURATION_TARGET_FILE = @"targetFile";
+static NSString* const CONFIGURATION_DOWNLOAD_URL = @"downloadURL";
+static NSString* const CONFIGURATION_SESSION_ID = @"sessionId";
+static NSString* const CONFIGURATION_DOWNLOAD_DELAY = @"downloadDelay";
+static NSString* const LOG_TAG = @"[ BackgroundDownload ] : ";
+
 @implementation BackgroundDownload {
     bool ignoreNextError;
     NSMutableDictionary *activeDownloads;
@@ -26,63 +33,93 @@
 
 @synthesize session;
 
-- (Download *) downloadItemWithUri:(NSString *) uri {
-    return activeDownloads ? [activeDownloads valueForKey:uri] : nil;
+- (Download *) downloadItemWithKey:(NSString *) downloadItemKey {
+    return self->activeDownloads ? [self->activeDownloads valueForKey:downloadItemKey] : nil;
 }
 
 
 - (Download *) downloadItemWithTask:(NSURLSessionTask *) task {
-    if (!activeDownloads) {
+    NSURLRequest* originalRequest = [task originalRequest];
+    NSString* downloadURL = [[originalRequest URL] absoluteString];
+    NSDictionary* requestHeaders = [originalRequest allHTTPHeaderFields];
+
+    NSString* downloadItemKey = [self downloadItemKey:downloadURL requestHeaders:requestHeaders];
+
+    if (!self->activeDownloads) {
         return nil;
     }
+
     @synchronized (self) {
-        for(NSInteger i = 0; i < activeDownloads.count; i++){
-            Download* downloadItem = activeDownloads.allValues[i];
-            if (downloadItem.task == task) {
-                return downloadItem;
-            }
-        }
+        Download* selectedDownload = [self downloadItemWithKey:downloadItemKey];
+        return selectedDownload;
     }
+
     return nil;
+}
+
+- (NSString *) downloadItemKey:(NSString *) downloadURL requestHeaders:(NSDictionary *) requestHeaders {
+    NSMutableString* downloadItemKey = [[NSMutableString alloc] init];
+    NSString* requestHeaderString =[[requestHeaders allValues] componentsJoinedByString:@"_"];
+
+    [downloadItemKey appendFormat:@"%@_%@",downloadURL, requestHeaderString];
+
+    return downloadItemKey;
 }
 
 - (void)startAsync:(CDVInvokedUrlCommand*)command
 {
-    if (!activeDownloads) {
-        activeDownloads = [[NSMutableDictionary alloc] init];
+    NSDictionary *downloadConfiguration = [command.arguments objectAtIndex:0];
+
+    if (!self->activeDownloads) {
+        self->activeDownloads = [[NSMutableDictionary alloc] init];
     }
 
-    session = [self backgroundSession];
+    self.session = [self backgroundSession:[downloadConfiguration valueForKey:CONFIGURATION_SESSION_ID]];
 
     [session getTasksWithCompletionHandler:^(NSArray *dataTasks, NSArray *uploadTasks, NSArray *downloadTasks) {
-        NSString *uri = [command.arguments objectAtIndex:0];
-        Download *downloadItem = [activeDownloads valueForKey:uri];
-        NSString *uriMatcher = nil;
-        if (command.arguments.count > 2 &&
-            ![[command.arguments objectAtIndex:2] isEqual:[NSNull null]]) {
-            uriMatcher = [command.arguments objectAtIndex:2];
+        NSString* downloadUrl = [downloadConfiguration valueForKey:CONFIGURATION_DOWNLOAD_URL];
+        NSMutableDictionary *requestHeaders = [downloadConfiguration valueForKey:CONFIGURATION_REQUEST_HEADERS];
+        NSString* downloadItemKey = [self downloadItemKey:downloadUrl requestHeaders:requestHeaders];
+
+        NSDate* earliestBeginDate = nil;
+        if([downloadConfiguration valueForKey:CONFIGURATION_DOWNLOAD_DELAY] != NULL) {
+            double downloadDelay =[[downloadConfiguration valueForKey:CONFIGURATION_DOWNLOAD_DELAY] doubleValue];
+            earliestBeginDate = [[[NSDate alloc] init] dateByAddingTimeInterval:downloadDelay];
         }
 
+        Download* downloadItem = [self->activeDownloads valueForKey:downloadItemKey];
+
         if (!downloadItem) {
-            NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:uri]];
-            downloadItem = [[Download alloc] initWithPath:[command.arguments objectAtIndex:1]
-                                                      uri:uri
-                                               uriMatcher:uriMatcher
-                                               callbackId:command.callbackId
-                                                     task:nil];
-            [self attachToExistingDownload:downloadTasks downloadItem:downloadItem];
-            if (downloadItem.task == nil) {
-                downloadItem.task = [session downloadTaskWithRequest:request];
+
+            NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:downloadUrl]];
+
+            if(requestHeaders != NULL) {
+                for (NSString *key in requestHeaders) {
+                    [request addValue:requestHeaders[key] forHTTPHeaderField:key];
+                }
             }
 
-            @synchronized (activeDownloads) {
-                [activeDownloads setObject:downloadItem forKey:downloadItem.uriString];
+            downloadItem = [[Download alloc] initWithConfiguration:downloadConfiguration callbackId:command.callbackId task:nil];
+
+            [self attachToExistingDownload:downloadTasks downloadItem:downloadItem];
+
+
+            if (downloadItem.task == nil) {
+                downloadItem.task = [self.session downloadTaskWithRequest:request];
+
+                if(earliestBeginDate != nil) {
+                    [downloadItem.task setEarliestBeginDate:earliestBeginDate];
+                }
+            }
+
+            @synchronized (self->activeDownloads) {
+                [self->activeDownloads setObject:downloadItem forKey:downloadItemKey];
             }
         }
 
         [downloadItem.task resume];
 
-        ignoreNextError = NO;
+        self->ignoreNextError = NO;
 
         if (downloadTasks.count > 0) {
             for(NSInteger i = 0; i < downloadTasks.count; i++) {
@@ -94,12 +131,21 @@
     }];
 }
 
-- (NSURLSession *)backgroundSession
+- (NSURLSession *)backgroundSession:(NSString *) sessionId
 {
     static NSURLSession *backgroundSession = nil;
     static dispatch_once_t onceToken;
+
+    NSString* configurationIdPrefix = @"com.cordova.plugin.BackgroundDownload.BackgroundSession";
+    NSMutableString *configurationId = [[NSMutableString alloc] init];
+
+    [configurationId appendString:configurationIdPrefix];
+    if(sessionId != nil){
+        [configurationId appendFormat:@".%@",sessionId];
+    }
+
     dispatch_once(&onceToken, ^{
-        NSURLSessionConfiguration *config = [NSURLSessionConfiguration backgroundSessionConfigurationWithIdentifier:@"com.cordova.plugin.BackgroundDownload.BackgroundSession"];
+        NSURLSessionConfiguration *config = [NSURLSessionConfiguration backgroundSessionConfigurationWithIdentifier:configurationId];
         backgroundSession = [NSURLSession sessionWithConfiguration:config delegate:self delegateQueue:nil];
     });
     return backgroundSession;
@@ -108,54 +154,32 @@
 - (void)stop:(CDVInvokedUrlCommand*)command
 {
     CDVPluginResult* pluginResult = nil;
-    NSString* myarg = [command.arguments objectAtIndex:0];
+    NSDictionary* downloadConfiguration = [command.arguments objectAtIndex:0];
 
-    if (myarg != nil) {
+    if (downloadConfiguration != nil && [downloadConfiguration valueForKey:CONFIGURATION_DOWNLOAD_URL] != nil) {
         pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+        NSString* downloadItemKey = [self downloadItemKey:[downloadConfiguration valueForKey:CONFIGURATION_DOWNLOAD_URL] requestHeaders:[downloadConfiguration valueForKey:CONFIGURATION_REQUEST_HEADERS]];
+
+        [self cleanUpWithKey:downloadItemKey];
     } else {
         pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Arg was null"];
     }
-
-    [self cleanUpWithUri:[command.arguments objectAtIndex:0]];
 
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
 - (void) attachToExistingDownload:(NSArray *)downloadTasks downloadItem:(Download *) downloadItem
 {
-    NSRegularExpression *regex = nil;
-    if (downloadItem.uriMatcher != nil && ![downloadItem.uriMatcher isEqual:@""]) {
-        regex = [NSRegularExpression regularExpressionWithPattern:downloadItem.uriMatcher
-                                                          options:NSRegularExpressionCaseInsensitive
-                                                            error:nil];
-    }
     for(NSInteger i = 0; i < downloadTasks.count; i++) {
-        NSString * existingUrl = ((NSURLSessionDownloadTask *)downloadTasks[i]).originalRequest.URL.absoluteString;
-        bool urlMatches = false;
-        if (regex != nil) {
-            NSString *substringForExistingUrlMatch = nil;
-            NSString *substringForNewUrlMatch = nil;
-            NSRange rangeOfExistingUrlMatch = [regex rangeOfFirstMatchInString:existingUrl
-                                                                       options:0
-                                                                         range:NSMakeRange(0, [existingUrl length])];
-            if (!NSEqualRanges(rangeOfExistingUrlMatch, NSMakeRange(NSNotFound, 0))) {
-                substringForExistingUrlMatch = [existingUrl substringWithRange:rangeOfExistingUrlMatch];
-            }
-            NSRange rangeOfNewUrlMatch = [regex rangeOfFirstMatchInString:downloadItem.uriString
-                                                                       options:0
-                                                                         range:NSMakeRange(0, [downloadItem.uriString length])];
-            if (!NSEqualRanges(rangeOfNewUrlMatch, NSMakeRange(NSNotFound, 0))) {
-                substringForNewUrlMatch = [downloadItem.uriString substringWithRange:rangeOfNewUrlMatch];
-            }
-            
-            urlMatches = substringForExistingUrlMatch != nil &&
-                                substringForNewUrlMatch != nil &&
-                                [substringForExistingUrlMatch isEqual:substringForNewUrlMatch];
-        }
+        NSURLRequest* originalRequest = ((NSURLSessionDownloadTask *)downloadTasks[i]).originalRequest;
 
-        if (urlMatches || [existingUrl isEqual:downloadItem.uriString]) {
+        NSString * existingDownloadItemKey = [self downloadItemKey:[[originalRequest URL] absoluteString] requestHeaders:[originalRequest allHTTPHeaderFields]];
+
+        NSString* downloadItemKey = [self downloadItemKey:[downloadItem.configuration valueForKey:CONFIGURATION_DOWNLOAD_URL] requestHeaders:[downloadItem.configuration valueForKey:CONFIGURATION_REQUEST_HEADERS]];
+
+        if ([existingDownloadItemKey isEqual:downloadItemKey]) {
             downloadItem.task = downloadTasks[i];
-            return;
+            break;
         }
     }
 }
@@ -167,14 +191,16 @@
     }
 
     [downloadItem.task cancel];
-    @synchronized (activeDownloads) {
-        [activeDownloads removeObjectForKey:downloadItem.uriString];
+    @synchronized (self->activeDownloads) {
+        NSString* downloadItemKey = [self downloadItemKey:[downloadItem.configuration valueForKey:CONFIGURATION_DOWNLOAD_URL] requestHeaders:[downloadItem.configuration valueForKey:CONFIGURATION_REQUEST_HEADERS]];
+
+        [self->activeDownloads removeObjectForKey:downloadItemKey];
     }
 }
 
--(void) cleanUpWithUri:(NSString*) uri
+-(void) cleanUpWithKey:(NSString*) downloadItemKey
 {
-    Download *curDownload = [self downloadItemWithUri: uri];
+    Download *curDownload = [self downloadItemWithKey:downloadItemKey];
     [self cleanUp:curDownload];
 }
 
@@ -199,12 +225,16 @@
     Download * curDownload = [self downloadItemWithTask:task];
     if (!curDownload)
         return;
+
+
+    NSString* downloadItemKey = [self downloadItemKey:[curDownload.configuration valueForKey:CONFIGURATION_DOWNLOAD_URL] requestHeaders:[curDownload.configuration valueForKey:CONFIGURATION_REQUEST_HEADERS]];
+
     NSInteger statusCode = [(NSHTTPURLResponse *)[task response] statusCode];
     if (statusCode >= 400) {
         CDVPluginResult* errorResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:[NSHTTPURLResponse localizedStringForStatusCode:statusCode]];
         [self.commandDelegate sendPluginResult:errorResult callbackId:curDownload.callbackId];
         @synchronized (self) {
-            [activeDownloads removeObjectForKey:curDownload.uriString];
+            [self->activeDownloads removeObjectForKey:downloadItemKey];
         }
         return;
     }
@@ -236,7 +266,7 @@
     }
 
     @synchronized (self) {
-        [activeDownloads removeObjectForKey:curDownload.uriString];
+        [self->activeDownloads removeObjectForKey:downloadItemKey];
     }
 }
 
@@ -247,7 +277,7 @@
 
     NSFileManager *fileManager = [NSFileManager defaultManager];
 
-    NSURL *targetURL = [NSURL URLWithString:curDownload.filePath];
+    NSURL *targetURL = [NSURL URLWithString:[curDownload.configuration valueForKey:CONFIGURATION_TARGET_FILE]];
 
     [fileManager removeItemAtPath:targetURL.path error: nil];
 
@@ -264,7 +294,7 @@
 
     NSString *errorCode = @"";
     if (error != nil) {
-        errorCode = [[NSString alloc] initWithFormat:@" - (%d)", error.code];
+        errorCode = [[NSString alloc] initWithFormat:@" - (%ld)", error.code];
     }
 
     curDownload.error = [@"Cannot copy from temporary path to actual path " stringByAppendingString:errorCode];
@@ -273,12 +303,10 @@
 
 @implementation Download
 
-- (id) initWithPath:(NSString *)filePath uri:(NSString *)uri uriMatcher:(NSString *)uriMatcher callbackId:(NSString *)callbackId task:(NSURLSessionDownloadTask *)task {
+- (id) initWithConfiguration:(NSDictionary *)downloadConfiguration callbackId:(NSString *)callbackId task:(NSURLSessionDownloadTask *)task {
     if ( self = [super init] ) {
+        self.configuration = downloadConfiguration;
         self.error = nil;
-        self.filePath = filePath;
-        self.uriString = uri;
-        self.uriMatcher = uriMatcher;
         self.callbackId = callbackId;
         self.task = task;
         return self;
