@@ -24,6 +24,9 @@ static NSString* const CONFIGURATION_TARGET_FILE = @"targetFile";
 static NSString* const CONFIGURATION_DOWNLOAD_URL = @"downloadURL";
 static NSString* const CONFIGURATION_SESSION_ID = @"sessionId";
 static NSString* const CONFIGURATION_DOWNLOAD_DELAY = @"downloadDelay";
+static NSString* const RESPONSE_HEADERS = @"headers";
+static NSString* const RESPONSE_STATUS_CODE = @"statusCode";
+static NSString* const RESPONSE_DOWNLOADED_FILE = @"downloadedFile";
 static NSString* const LOG_TAG = @"[ BackgroundDownload ] : ";
 
 @implementation BackgroundDownload {
@@ -58,12 +61,7 @@ static NSString* const LOG_TAG = @"[ BackgroundDownload ] : ";
 }
 
 - (NSString *) downloadItemKey:(NSString *) downloadURL requestHeaders:(NSDictionary *) requestHeaders {
-    NSMutableString* downloadItemKey = [[NSMutableString alloc] init];
-    NSString* requestHeaderString =[[requestHeaders allValues] componentsJoinedByString:@"_"];
-
-    [downloadItemKey appendFormat:@"%@_%@",downloadURL, requestHeaderString];
-
-    return downloadItemKey;
+    return [@"" stringByAppendingFormat:@"%@_%@",downloadURL, [requestHeaders.allValues componentsJoinedByString:@"_"]];
 }
 
 - (void)startAsync:(CDVInvokedUrlCommand*)command
@@ -226,13 +224,14 @@ static NSString* const LOG_TAG = @"[ BackgroundDownload ] : ";
     if (!curDownload)
         return;
 
-
+    CDVPluginResult* pluginResult;
+    
     NSString* downloadItemKey = [self downloadItemKey:[curDownload.configuration valueForKey:CONFIGURATION_DOWNLOAD_URL] requestHeaders:[curDownload.configuration valueForKey:CONFIGURATION_REQUEST_HEADERS]];
 
     NSInteger statusCode = [(NSHTTPURLResponse *)[task response] statusCode];
     if (statusCode >= 400) {
-        CDVPluginResult* errorResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:[NSHTTPURLResponse localizedStringForStatusCode:statusCode]];
-        [self.commandDelegate sendPluginResult:errorResult callbackId:curDownload.callbackId];
+        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:[NSHTTPURLResponse localizedStringForStatusCode:statusCode]];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:curDownload.callbackId];
         @synchronized (self) {
             [self->activeDownloads removeObjectForKey:downloadItemKey];
         }
@@ -255,13 +254,16 @@ static NSString* const LOG_TAG = @"[ BackgroundDownload ] : ";
                 return;
             }
         }
-        CDVPluginResult* errorResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:[error localizedDescription]];
-        [self.commandDelegate sendPluginResult:errorResult callbackId:curDownload.callbackId];
+        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:[error localizedDescription]];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:curDownload.callbackId];
     } if (curDownload.error != nil) {
-        CDVPluginResult* errorResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:curDownload.error];
-        [self.commandDelegate sendPluginResult:errorResult callbackId:curDownload.callbackId];
+        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:curDownload.error];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:curDownload.callbackId];
     } else {
-        CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+        NSLog(@"%@ Successfully downloaded the file", LOG_TAG);
+        
+        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:curDownload.successPayload];
+        
         [self.commandDelegate sendPluginResult:pluginResult callbackId:curDownload.callbackId];
     }
 
@@ -272,29 +274,43 @@ static NSString* const LOG_TAG = @"[ BackgroundDownload ] : ";
 
 - (void)URLSession:(NSURLSession *)session downloadTask:(NSURLSessionDownloadTask *)downloadTask didFinishDownloadingToURL:(NSURL *)location {
     Download * curDownload = [self downloadItemWithTask:downloadTask];
-    if (!curDownload)
+    if (!curDownload){
+        NSLog(@"%@ No current download available", LOG_TAG);
         return;
+    }
+        
 
     NSFileManager *fileManager = [NSFileManager defaultManager];
 
     NSURL *targetURL = [NSURL URLWithString:[curDownload.configuration valueForKey:CONFIGURATION_TARGET_FILE]];
 
+    NSError * error;
+
+    NSHTTPURLResponse* downloadTaskResponse = (NSHTTPURLResponse *)downloadTask.response;
+    
+    [curDownload.successPayload setValue:[NSNumber numberWithLong:downloadTaskResponse.statusCode] forKey:RESPONSE_STATUS_CODE];
+    [curDownload.successPayload setValue:downloadTaskResponse.allHeaderFields forKey:RESPONSE_HEADERS];
+    [curDownload.successPayload setValue:[curDownload.configuration valueForKey:CONFIGURATION_TARGET_FILE] forKey:RESPONSE_DOWNLOADED_FILE];
+
+    // remove already existing file
     [fileManager removeItemAtPath:targetURL.path error: nil];
 
-    NSError * error;
     bool result = [fileManager moveItemAtURL:location toURL:targetURL error:&error];
     if (result) {
+        NSLog(@"%@ Successfully moved the downloaded file to %@", LOG_TAG, targetURL);
         return;
     }
 
     result = [fileManager copyItemAtURL:location toURL:targetURL error:&error];
     if (result) {
+        NSLog(@"%@ Successfully copied the downloaded file to %@", LOG_TAG, targetURL);
         return;
     }
 
     NSString *errorCode = @"";
     if (error != nil) {
-        errorCode = [[NSString alloc] initWithFormat:@" - (%ld)", error.code];
+        NSLog(@"%@ Error in copying the downloaded file to persistent location: %@", LOG_TAG, error.localizedDescription);
+        errorCode = [[NSString alloc] initWithFormat:@" - %@ \n %@ (%ld)", error.localizedFailureReason, error.localizedDescription, error.code];
     }
 
     curDownload.error = [@"Cannot copy from temporary path to actual path " stringByAppendingString:errorCode];
@@ -309,6 +325,7 @@ static NSString* const LOG_TAG = @"[ BackgroundDownload ] : ";
         self.error = nil;
         self.callbackId = callbackId;
         self.task = task;
+        self.successPayload = [[NSMutableDictionary alloc] init];
         return self;
     }
     return nil;

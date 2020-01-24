@@ -33,6 +33,7 @@
 @interface Download : NSObject
 
 @property NSString *error;
+@property NSMutableDictionary *successPayload;
 @property NSString *callbackId;
 @property NSDictionary *configuration;
 @property (nonatomic) NSURLSessionDownloadTask *task;
