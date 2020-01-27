@@ -23,22 +23,6 @@ xmlns:android="http://schemas.android.com/apk/res/android"
         <clobbers target="DownloadOperation" />
     </js-module>
 
-    <!-- android -->
-    <platform name="android">
-        <config-file target="res/xml/config.xml" parent="/*">
-            <feature name="BackgroundDownload" >
-                <param name="android-package" value="org.apache.cordova.backgroundDownload.BackgroundDownload"/>
-            </feature>
-        </config-file>
-
-        <config-file target="AndroidManifest.xml" parent="/*">
-            <uses-permission android:name="android.permission.INTERNET" />
-            <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-        </config-file>
-
-        <source-file src="src/android/BackgroundDownload.java" target-dir="src/org/apache/cordova/backgroundDownload" />
-    </platform>
-
     <!-- ios -->
     <platform name="ios">
         <config-file target="config.xml" parent="/*">
@@ -50,27 +34,20 @@ xmlns:android="http://schemas.android.com/apk/res/android"
         <source-file src="src/ios/BackgroundDownload.m" />
     </platform>
 
-    <!-- wp8 -->
-    <platform name="wp8">
-        <config-file target="config.xml" parent="/*">
-            <feature name="BackgroundDownload">
-                <param name="wp-package" value="BackgroundDownload"/>
-            </feature>
-        </config-file>
-        <source-file src="src/wp/BackgroundDownload.cs" />
-    </platform>
+    <!-- android -->
+    <!-- TODO: Make the plugin available for android -->
+    <!--<platform name="android">-->
+        <!--<config-file target="res/xml/config.xml" parent="/*">-->
+            <!--<feature name="BackgroundDownload" >-->
+                <!--<param name="android-package" value="org.apache.cordova.backgroundDownload.BackgroundDownload"/>-->
+            <!--</feature>-->
+        <!--</config-file>-->
 
-    <!-- windows8 -->
-    <platform name="windows8">
-        <js-module src="src/windows/BackgroundDownloadProxy.js" name="BackgroundDownload">
-            <merges target="" />
-        </js-module>
-    </platform>
+        <!--<config-file target="AndroidManifest.xml" parent="/*">-->
+            <!--<uses-permission android:name="android.permission.INTERNET" />-->
+            <!--<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />-->
+        <!--</config-file>-->
 
-     <!-- windows -->
-    <platform name="windows">
-        <js-module src="src/windows/BackgroundDownloadProxy.js" name="BackgroundDownload">
-            <merges target="" />
-        </js-module>
-    </platform>
+        <!--<source-file src="src/android/BackgroundDownload.java" target-dir="src/org/apache/cordova/backgroundDownload" />-->
+    <!--</platform>-->
 </plugin>

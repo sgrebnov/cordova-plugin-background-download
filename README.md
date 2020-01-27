@@ -11,11 +11,18 @@ API provides an advanced file download functionality that persists beyond app te
         window.requestFileSystem(LocalFileSystem.PERSISTENT, 0, function(fileSystem) {
             fileSystem.root.getFile(fileName, { create: true }, function (targetFile) {
                 
-                var onSuccess, onError, onProgress; // plugin callbacks to track operation execution status and progress
+                const onSuccess, onError, onProgress; // plugin callbacks to track operation execution status and progress
         
-                var downloader = new BackgroundTransfer.BackgroundDownloader();
+                const downloader = new BackgroundTransfer.BackgroundDownloader();
                 // Create a new download operation.
-                var download = downloader.createDownload(uriString, targetFile);
+                const configuration = { 
+                   targetFile: <Path to local file system to store the downloaded file>,
+                   downloadURL: <url to download from>,
+                   requestHeaders: <request headers to be added on the request to download file>
+                   sessionId: <id to assign to the url session to create request>
+                   downloadDelay: <download delay in seconds>
+                }
+                const download = downloader.createDownload(configuration);
                 // Start the download and persist the promise to be able to cancel the download.
                 app.downloadPromise = download.startAsync().then(onSuccess, onError, onProgress);
             });
