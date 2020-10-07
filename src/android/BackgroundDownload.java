@@ -90,7 +90,7 @@ public class BackgroundDownload extends CordovaPlugin {
         private Timer timerProgressUpdate = null;
         private boolean isCanceled;
 
-        public static Download create(JSONArray args, CallbackContext callbackContext) throws JSONException  {
+        public static Download create(JSONArray args, Context context, CallbackContext callbackContext) throws JSONException  {
             String uriMatcher = null;
             if (args.length() > 2 && !"null".equals(args.getString(2))) {
                 uriMatcher = args.getString(2);
@@ -101,8 +101,14 @@ public class BackgroundDownload extends CordovaPlugin {
                 notificationTitle = args.getString(3);
             }
 
-            return new Download(args.get(0).toString(), args.get(1).toString(), notificationTitle, uriMatcher,
+            Download download = new Download(args.get(0).toString(), args.get(1).toString(), notificationTitle, uriMatcher,
                     callbackContext);
+            if(context != null){
+              download.setTempFileUri(Uri.fromFile(new File(context.getExternalFilesDir(null),
+                download.getTargetFileUri().getLastPathSegment() + "." + System.currentTimeMillis())).toString());
+            }
+
+            return download;
         }
 
         public Download(String uriString, String targetFileUri, String notificationTitle,
@@ -111,8 +117,6 @@ public class BackgroundDownload extends CordovaPlugin {
             this.setTargetFileUri(targetFileUri);
             this.notificationTitle = notificationTitle;
             this.uriMatcher = uriMatcher;
-            this.setTempFileUri(Uri.fromFile(new File(android.os.Environment.getExternalStorageDirectory().getPath(),
-                    Uri.parse(targetFileUri).getLastPathSegment() + "." + System.currentTimeMillis())).toString());
             this.callbackContext = callbackContext;
         }
 
@@ -223,7 +227,8 @@ public class BackgroundDownload extends CordovaPlugin {
             return;
         }
 
-        Download curDownload = Download.create(args, callbackContext);
+        Context context = this.cordova.getContext();
+        Download curDownload = Download.create(args, context, callbackContext);
 
         if (activeDownloads.containsKey(curDownload.getUriString())) {
             return;
@@ -436,7 +441,7 @@ public class BackgroundDownload extends CordovaPlugin {
         int idxId = cur.getColumnIndex(DownloadManager.COLUMN_ID);
         int idxUri = cur.getColumnIndex(DownloadManager.COLUMN_URI);
         int idxLocalUri = cur.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI);
-        
+
         final Pattern pattern = downloadItem.getUriMatcher() != null && !"".equals(downloadItem.getUriMatcher())
             ? Pattern.compile(downloadItem.getUriMatcher()) : null;
 
@@ -446,7 +451,7 @@ public class BackgroundDownload extends CordovaPlugin {
             if (pattern != null) {
                 Matcher mForExistingUri = pattern.matcher(existingDownloadUri);
                 Matcher mForNewUri = pattern.matcher(downloadItem.getUriString());
-                uriMatches = mForExistingUri.find() && mForNewUri.find() && 
+                uriMatches = mForExistingUri.find() && mForNewUri.find() &&
                         mForExistingUri.group().equals(mForNewUri.group());
             }
             if (uriMatches || downloadItem.getUriString().equals(cur.getString(idxUri))) {
